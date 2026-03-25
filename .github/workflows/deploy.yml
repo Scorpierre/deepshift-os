@@ -1,0 +1,23 @@
+name: Deploy to VM
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    name: Deploy → deepshift-vm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH & deploy
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/deepshift
+            git pull origin main
+            docker compose up --build -d
+            echo "✅ Deploy done at $(date)"
