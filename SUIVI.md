@@ -24,11 +24,32 @@
 
 ---
 
+## GitHub & CI/CD
+
+| Tâche | Statut | Notes |
+|-------|--------|-------|
+| Repo GitHub créé | ✅ Fait | `github.com/Scorpierre/deepshift-os` |
+| Branche `dev` créée | ✅ Fait | Flux : `feature/*` → `dev` → `main` |
+| CI GitHub Actions | ✅ Fait | Déclenché sur PR vers `main` ou `dev` — typecheck + lint + build |
+| Auto-deploy GitHub Actions | ✅ Fait | Push sur `main` → SSH → `docker compose up --build` sur la VM |
+| Secrets GitHub configurés | ✅ Fait | `VM_HOST`, `VM_USER`, `SSH_PRIVATE_KEY` |
+| Protection branche `main` | ⬜ À faire | Nécessite GitHub Pro (repo privé) — à activer si passage Pro ou repo public |
+| Template PR | ✅ Fait | `.github/pull_request_template.md` |
+
+### Workflow Git au quotidien
+```
+feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
+```
+- Coder sur `dev` ou `feature/xxx`
+- PR vers `main` pour mettre en prod
+- Ne jamais pusher directement sur `main`
+
+---
+
 ## Application DeepShift OS
 
 | Tâche | Statut | Notes |
 |-------|--------|-------|
-| Repo GitHub `deepshift-os` créé | ⬜ À faire | — |
 | Scaffolding Next.js 15 + TypeScript | ⬜ À faire | App Router |
 | Prisma + PostgreSQL configuré | ⬜ À faire | — |
 | shadcn/ui + Tailwind configuré | ⬜ À faire | — |
@@ -72,16 +93,16 @@
 
 ---
 
-## Stack technique validée
+## Stack technique
 
 | Couche | Techno | Statut |
 |--------|--------|--------|
 | Frontend + Backend | Next.js 15 + TypeScript | ⬜ |
-| Base de données | PostgreSQL 16 | ⬜ (Docker Compose prêt) |
+| Base de données | PostgreSQL 16 | ✅ (Docker — port 5432) |
 | ORM | Prisma | ⬜ |
 | UI | shadcn/ui + Tailwind | ⬜ |
 | IA | Claude API | ⬜ |
-| Automatisation | n8n self-hosted | ⬜ (Docker Compose prêt) |
+| Automatisation | n8n self-hosted | ✅ (Docker — http://20.111.38.245:5678) |
 | Email | Gmail API | ⬜ |
 | Calendrier | Google Calendar API | ⬜ |
-| Hébergement | Azure VM `deepshift-vm` — FranceCentral | ⬜ (en déploiement) |
+| Hébergement | Azure VM `deepshift-vm` — FranceCentral | ✅ (`20.111.38.245`) |

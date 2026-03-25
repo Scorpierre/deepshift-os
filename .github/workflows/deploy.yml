@@ -19,5 +19,6 @@ jobs:
           script: |
             cd /opt/deepshift
             git pull origin main
+            cd app/web
             docker compose up --build -d
             echo "✅ Deploy done at $(date)"
