@@ -39,7 +39,7 @@ Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entrepr
 | Couche | Techno |
 |--------|--------|
 | Frontend + Backend | Next.js 15 (App Router) + TypeScript |
-| Base de données | PostgreSQL |
+| Base de données | PostgreSQL 16 |
 | ORM | Prisma |
 | UI | shadcn/ui + Tailwind |
 | IA | Claude API (Anthropic) — embarqué dans l'app |
@@ -47,21 +47,57 @@ Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entrepr
 | Email | Gmail API (compte gratuit pour démarrer) |
 | Calendrier | Google Calendar API |
 | Transcription appels | Granola (optionnel, ~15€/mois) |
-| Hébergement | Microsoft Azure — VM B2ms (2 vCPU, 8GB RAM) |
-| Versionning | GitHub |
+| Hébergement | Microsoft Azure — VM `Standard_D2s_v3` (2 vCPU, 8GB RAM) |
+| Versionning | GitHub — `github.com/Scorpierre/deepshift-os` |
 
 ---
 
 ## Infrastructure Azure
 
 - **Cloud** : Microsoft Azure — crédits 100$ pour 1 an
-- **VM** : B2ms — Ubuntu 24.04 LTS — 2 vCPU / 8GB RAM
-- **Coût estimé VM** : ~70$/an (dans les crédits)
+- **VM** : `Standard_D2s_v3` — Ubuntu 24.04 LTS — 2 vCPU / 8GB RAM
+  - ⚠️ B2ms voulu initialement mais indisponible en FranceCentral
+- **IP publique** : `20.111.38.245` (statique)
+- **SSH** : `ssh -i ~/.ssh/id_ed25519 deepshift@20.111.38.245`
 - **Resource group** : `deepshift-rg`
 - **Nom VM** : `deepshift-vm`
 - **Username SSH** : `deepshift`
-- **Pas de domaine pour l'instant** — accès via IP publique Azure
 - **Ports ouverts** : 22 (SSH), 80 (HTTP), 443 (HTTPS), 5678 (n8n), 3000 (app Next.js)
+- **Terraform** : `app/cloud/main.tf` — secrets dans `app/cloud/terraform.tfvars` (gitignored)
+
+### Commandes VM utiles
+```bash
+# Éteindre (stoppe la facturation)
+az vm deallocate --resource-group deepshift-rg --name deepshift-vm
+
+# Rallumer
+az vm start --resource-group deepshift-rg --name deepshift-vm
+
+# SSH
+ssh -i ~/.ssh/id_ed25519 deepshift@20.111.38.245
+```
+
+### Services actifs sur la VM
+| Service | URL | Statut |
+|---------|-----|--------|
+| n8n | http://20.111.38.245:5678 | ✅ UP |
+| PostgreSQL | port 5432 (interne) | ✅ UP |
+| Next.js | http://20.111.38.245:3000 | ⬜ pas encore déployé |
+
+---
+
+## GitHub & CI/CD
+
+- **Repo** : `github.com/Scorpierre/deepshift-os`
+- **Branches** : `main` (prod) · `dev` (travail quotidien) · `feature/*` (fonctionnalités)
+- **Workflow Git** :
+  ```
+  feature/xxx  →  dev  →  PR  →  main  →  auto-deploy VM
+  ```
+- **CI** : GitHub Actions — typecheck + lint + build sur chaque PR vers `main` ou `dev`
+- **Deploy** : push sur `main` → SSH → `docker compose up --build` sur la VM
+- **Secrets GitHub** : `VM_HOST`, `VM_USER`, `SSH_PRIVATE_KEY` configurés
+- **Règle** : ne jamais pusher directement sur `main`
 
 ---
 
@@ -69,12 +105,12 @@ Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entrepr
 
 | Outil | Coût |
 |-------|------|
-| Azure VM B2ms | ~6$/mois (crédits) |
+| Azure VM D2s_v3 | ~70$/mois en continu — éteindre quand pas utilisé |
 | n8n self-hosted | 0€ |
 | Claude API (workflows n8n) | ~5-10€ |
 | Gmail | 0€ |
 | Granola (optionnel) | ~15€ |
-| **Total** | **~10-25€/mois** |
+| **Total actif** | **~10-25€/mois** |
 
 > Claude Pro (abonnement perso) et Claude API (pour n8n) sont deux choses séparées.
 > Le Pro = ce chat + Claude Code. L'API = les appels depuis n8n, facturation à la consommation.
@@ -94,16 +130,18 @@ Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entrepr
 
 ---
 
-## Où on en est
+## Où on en est (2026-03-25)
 
-- [ ] Setup Azure VM (créer VM B2ms, Ubuntu 24.04, clé SSH)
-- [ ] Firewall Azure (ports 22, 80, 443, 5678, 3000)
-- [ ] Connexion SSH + Docker installé
-- [ ] n8n lancé via Docker Compose
-- [ ] Credentials configurés (Claude API, Gmail OAuth, GitHub)
-- [ ] Repo GitHub créé (deepshift-os)
+- [x] Setup Azure VM + Terraform (`app/cloud/main.tf`)
+- [x] Firewall Azure (ports 22, 80, 443, 5678, 3000)
+- [x] Connexion SSH + Docker installé
+- [x] n8n lancé via Docker Compose + compte admin créé
+- [x] PostgreSQL lancé via Docker Compose
+- [x] Repo GitHub créé + branches `main` / `dev`
+- [x] CI/CD GitHub Actions configuré (`.github/workflows/`)
 - [ ] Scaffolding Next.js 15 + TypeScript + Prisma + PostgreSQL
 - [ ] shadcn/ui configuré
+- [ ] Credentials configurés (Claude API, Gmail OAuth, GitHub webhooks)
 - [ ] Module CRM — V1
 - [ ] Module Projets — V1
 - [ ] Module Finance — V1
@@ -116,8 +154,6 @@ Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entrepr
 
 ## Comment utiliser ce fichier
 
-**Dans Claude Chat** : colle le contenu de ce fichier en début de message, puis pose ta question.
+**Dans Claude Code** : place `CONTEXT.md` à la racine du repo. Claude le lit automatiquement au démarrage de la session.
 
-**Dans Claude Code** : place `CONTEXT.md` à la racine du repo. Dis `lis CONTEXT.md` au début de chaque session.
-
-**Mettre à jour** : coche les cases au fur et à mesure. C'est un fichier vivant.
+**Mettre à jour** : coche les cases au fur et à mesure. C'est un fichier vivant — toujours refléter l'état réel du projet.
