@@ -153,3 +153,5 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+
+/src/generated/prisma
