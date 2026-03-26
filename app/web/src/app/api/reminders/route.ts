@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ReminderType } from "@prisma/client";
 
 export async function GET() {
   const reminders = await prisma.reminder.findMany({
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
       prospectId: body.prospectId,
       dueAt: new Date(body.dueAt),
       note: body.note,
-      type: (body.type ?? "CUSTOM") as string,
+      type: (body.type ?? "CUSTOM") as ReminderType,
     },
   });
 

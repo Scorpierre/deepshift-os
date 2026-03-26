@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { triggerN8nAnalysis } from "@/lib/n8n";
+import { ProspectStatus } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   const prospects = await prisma.prospect.findMany({
     where: {
-      ...(status ? { status } : {}),
+      ...(status ? { status: status as ProspectStatus } : {}),
       ...(minScore ? { score: { gte: parseInt(minScore) } } : {}),
     },
     include: {
