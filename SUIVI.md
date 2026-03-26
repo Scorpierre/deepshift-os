@@ -50,9 +50,12 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Tâche | Statut | Notes |
 |-------|--------|-------|
-| Scaffolding Next.js 15 + TypeScript | ⬜ À faire | App Router |
-| Prisma + PostgreSQL configuré | ⬜ À faire | — |
-| shadcn/ui + Tailwind configuré | ⬜ À faire | — |
+| Scaffolding Next.js 15 + TypeScript | ✅ Fait | App Router — `app/web/` |
+| Prisma configuré | ✅ Fait | Prisma 7 — `app/web/prisma/` + `prisma.config.ts` |
+| shadcn/ui + Tailwind configuré | ✅ Fait | — |
+| Structure 5 modules | ✅ Fait | `/crm`, `/projets`, `/finance`, `/admin`, `/agenda` |
+| Layout dashboard | ✅ Fait | Nav latérale + routing |
+| Repo GitHub restructuré | ✅ Fait | `app/web/` Next.js · `app/cloud/` Terraform |
 
 ---
 
@@ -60,7 +63,7 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Module | Statut | Notes |
 |--------|--------|-------|
-| CRM & Prospection | ⬜ À faire | Pipeline prospects, scoring IA, relances auto |
+| CRM & Prospection | ✅ Fait | Kanban pipeline, fiche prospect, scoring IA, email personnalisé (scraping site/FB) |
 | Gestion de Projets | ⬜ À faire | Kanban, suivi temps, jalons |
 | Finance | ⬜ À faire | Devis, factures, relances paiement |
 | Interne / Admin | ⬜ À faire | Abonnements, base de connaissance, weekly review |
@@ -72,7 +75,7 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Service | Statut | Notes |
 |---------|--------|-------|
-| Claude API | ⬜ À configurer | Dans n8n + app Next.js |
+| Claude API | ✅ Fait | Connecté dans n8n + clé dans app Next.js (.env.local) |
 | Gmail OAuth | ⬜ À configurer | Envoi/réception emails automatisés |
 | Google Calendar API | ⬜ À configurer | Sync agenda |
 | GitHub (webhooks n8n) | ⬜ À configurer | Onboarding client → création repo |
@@ -97,11 +100,11 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Couche | Techno | Statut |
 |--------|--------|--------|
-| Frontend + Backend | Next.js 15 + TypeScript | ⬜ |
+| Frontend + Backend | Next.js 15 + TypeScript | ✅ (scaffoldé — `app/web/`) |
 | Base de données | PostgreSQL 16 | ✅ (Docker — port 5432) |
-| ORM | Prisma | ⬜ |
-| UI | shadcn/ui + Tailwind | ⬜ |
-| IA | Claude API | ⬜ |
+| ORM | Prisma 7 | ✅ (configuré — pas encore de modèles) |
+| UI | shadcn/ui + Tailwind | ✅ (initialisé) |
+| IA | Claude API | ✅ (n8n + Next.js) |
 | Automatisation | n8n self-hosted | ✅ (Docker — http://20.111.38.245:5678) |
 | Email | Gmail API | ⬜ |
 | Calendrier | Google Calendar API | ⬜ |

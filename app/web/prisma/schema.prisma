@@ -1,12 +1,120 @@
 // This is your Prisma schema file,
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─── CRM ───────────────────────────────────────────────────────────────────
+
+model Prospect {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Infos de base
+  name        String
+  company     String?
+  email       String  @unique
+  phone       String?
+  linkedinUrl String?
+  websiteUrl  String?
+
+  // Pipeline
+  status ProspectStatus @default(NEW)
+  score  Int? // 1-10 par Claude
+
+  // Contexte
+  needType        String[] // ["webapp", "site", "consulting", "api"]
+  estimatedBudget Float?
+  source          String? // linkedin, referral, github, site
+
+  // Suivi
+  lastContactedAt DateTime?
+  nextActionAt    DateTime?
+  nextActionNote  String?
+
+  // IA
+  aiSummary     String? // résumé Claude du prospect
+  aiScoreReason String? // pourquoi ce score
+
+  // Relations
+  emails    Email[]
+  notes     Note[]
+  reminders Reminder[]
+}
+
+enum ProspectStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL_SENT
+  NEGOTIATION
+  WON
+  LOST
+  ARCHIVED
+}
+
+model Email {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  direction EmailDirection
+  subject   String
+  body      String         @db.Text
+  sentAt    DateTime
+  gmailId   String? // ID Gmail pour le threading
+
+  // Analyse IA
+  aiAnalysis String? // résumé Claude de l'email reçu
+  aiIntent   String? // INTERESTED / NOT_INTERESTED / NEEDS_INFO / CALLBACK
+}
+
+enum EmailDirection {
+  SENT
+  RECEIVED
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  content String  @db.Text
+  source  String? // manual, granola, ai
+}
+
+model Reminder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  dueAt  DateTime
+  note   String
+  status ReminderStatus @default(PENDING)
+  type   ReminderType
+}
+
+enum ReminderStatus {
+  PENDING
+  DONE
+  SNOOZED
+}
+
+enum ReminderType {
+  FOLLOW_UP
+  CALL
+  PROPOSAL
+  CUSTOM
 }
