@@ -26,10 +26,10 @@ export async function POST() {
         content: `Génère un résumé hebdomadaire CRM pour DeepShift (auto-entrepreneur IT).
 
 Prospects actifs cette semaine (${prospects.length}) :
-${prospects.map((p) => `- ${p.name}${p.company ? ` (${p.company})` : ""} — statut: ${p.status}, score: ${p.score ?? "N/A"}`).join("\n")}
+${prospects.map((p: { name: string; company: string | null; status: string; score: number | null }) => `- ${p.name}${p.company ? ` (${p.company})` : ""} — statut: ${p.status}, score: ${p.score ?? "N/A"}`).join("\n")}
 
 Relances en retard (${reminders.length}) :
-${reminders.map((r) => `- ${r.prospect.name}: ${r.note} (échéance: ${r.dueAt.toLocaleDateString("fr-FR")})`).join("\n")}
+${reminders.map((r: { prospect: { name: string }; note: string; dueAt: Date }) => `- ${r.prospect.name}: ${r.note} (échéance: ${r.dueAt.toLocaleDateString("fr-FR")})`).join("\n")}
 
 Rédige un résumé en français : points clés, opportunités à saisir, actions prioritaires cette semaine.`,
       },
