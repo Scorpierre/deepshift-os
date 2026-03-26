@@ -17,8 +17,9 @@ jobs:
           username: ${{ secrets.VM_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /opt/deepshift
+            cd /opt/deepshift/repo
             git pull origin main
             cd app/web
+            DATABASE_URL="postgresql://deepshift:DeepShift2026!@localhost:5432/deepshift_db" npx prisma migrate deploy
             docker compose up --build -d
             echo "✅ Deploy done at $(date)"
