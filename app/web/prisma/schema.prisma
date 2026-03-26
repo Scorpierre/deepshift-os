@@ -38,6 +38,9 @@ model Prospect {
   nextActionAt    DateTime?
   nextActionNote  String?
 
+  // Contexte entreprise
+  companyDescription String? @db.Text // notes libres sur l'entreprise
+
   // IA
   aiSummary     String? // résumé Claude du prospect
   aiScoreReason String? // pourquoi ce score

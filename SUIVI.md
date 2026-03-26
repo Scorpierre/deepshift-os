@@ -1,6 +1,6 @@
 # DeepShift — Suivi d'avancement
 
-> Dernière mise à jour : 2026-03-25
+> Dernière mise à jour : 2026-03-26
 
 ---
 
@@ -31,7 +31,9 @@
 | Repo GitHub créé | ✅ Fait | `github.com/Scorpierre/deepshift-os` |
 | Branche `dev` créée | ✅ Fait | Flux : `feature/*` → `dev` → `main` |
 | CI GitHub Actions | ✅ Fait | Déclenché sur PR vers `main` ou `dev` — typecheck + lint + build |
-| Auto-deploy GitHub Actions | ✅ Fait | Push sur `main` → SSH → `docker compose up --build` sur la VM |
+| Auto-deploy GitHub Actions | ✅ Fait | Push sur `main` → SSH → `npm install` + `prisma migrate deploy` + `docker compose up --build` |
+| Déclenchement manuel deploy | ✅ Fait | `workflow_dispatch` ajouté — bouton "Run workflow" dans GitHub Actions |
+| Migrations auto en deploy | ✅ Fait | `prisma migrate deploy` avec IP privée `10.0.1.4` dans le script CI |
 | Secrets GitHub configurés | ✅ Fait | `VM_HOST`, `VM_USER`, `SSH_PRIVATE_KEY` |
 | Protection branche `main` | ⬜ À faire | Nécessite GitHub Pro (repo privé) — à activer si passage Pro ou repo public |
 | Template PR | ✅ Fait | `.github/pull_request_template.md` |
@@ -52,10 +54,16 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 |-------|--------|-------|
 | Scaffolding Next.js 15 + TypeScript | ✅ Fait | App Router — `app/web/` |
 | Prisma configuré | ✅ Fait | Prisma 7 — `app/web/prisma/` + `prisma.config.ts` |
+| `prisma generate` en postinstall | ✅ Fait | Ajouté dans `package.json` — évite les erreurs de types manquants en CI/CD |
 | shadcn/ui + Tailwind configuré | ✅ Fait | — |
 | Structure 5 modules | ✅ Fait | `/crm`, `/projets`, `/finance`, `/admin`, `/agenda` |
 | Layout dashboard | ✅ Fait | Nav latérale + routing |
 | Repo GitHub restructuré | ✅ Fait | `app/web/` Next.js · `app/cloud/` Terraform |
+| Fix TS Prisma 7 — enums | ✅ Fait | `ProspectStatus` et `ReminderType` : imports + casts explicites (TS2322) |
+| Fiche prospect `/crm/[id]` — v2 | ✅ Fait | Layout 3 colonnes, édition inline sur tous les champs, autosave blur, timeline emails+notes, modale email IA, rappels, tags |
+| Champ `companyDescription` | ✅ Fait | Ajouté au schéma Prisma + migration `20260326000000_add_company_description` |
+| Scoring IA — logique business | ✅ Fait | Prompt réécrit : score 0-10 = potentiel CA pour DeepShift (page FB + gros business → 9/10, Salesforce → 0/10) |
+| Fix parsing JSON Claude | ✅ Fait | Claude enveloppait sa réponse en markdown — regex `\{[\s\S]*\}` pour extraire le JSON brut |
 
 ---
 
@@ -63,7 +71,7 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Module | Statut | Notes |
 |--------|--------|-------|
-| CRM & Prospection | ✅ Fait | Kanban pipeline, fiche prospect, scoring IA, email personnalisé (scraping site/FB) |
+| CRM & Prospection | ✅ Fait | Kanban pipeline, fiche prospect 3 colonnes (inline edit + autosave), scoring IA business-oriented, email personnalisé (scraping site/FB), timeline activité, rappels, description entreprise |
 | Gestion de Projets | ⬜ À faire | Kanban, suivi temps, jalons |
 | Finance | ⬜ À faire | Devis, factures, relances paiement |
 | Interne / Admin | ⬜ À faire | Abonnements, base de connaissance, weekly review |
@@ -71,11 +79,26 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 ---
 
+## Config VM (important)
+
+| Paramètre | Valeur |
+|-----------|--------|
+| IP publique | `20.111.38.245` |
+| IP privée | `10.0.1.4` |
+| DATABASE_URL | `postgresql://deepshift:...@10.0.1.4:5432/deepshift_db` |
+| N8N_WEBHOOK_PROSPECT_ANALYSIS | `http://10.0.1.4:5678/webhook/prospect-analysis` |
+| ANTHROPIC_API_KEY | configurée directement dans le nœud n8n "Call Claude" |
+| n8n → Update Prospect | méthode `POST` vers `http://10.0.1.4:3000/api/webhooks/n8n` |
+
+> ⚠️ Toujours utiliser `10.0.1.4` (IP privée) dans les configs inter-services sur la VM — jamais `localhost`.
+
+---
+
 ## Credentials & Intégrations
 
 | Service | Statut | Notes |
 |---------|--------|-------|
-| Claude API | ✅ Fait | Connecté dans n8n + clé dans app Next.js (.env.local) |
+| Claude API | ✅ Fait | Connecté dans n8n + clé dans app Next.js (.env.production) |
 | Gmail OAuth | ⬜ À configurer | Envoi/réception emails automatisés |
 | Google Calendar API | ⬜ À configurer | Sync agenda |
 | GitHub (webhooks n8n) | ⬜ À configurer | Onboarding client → création repo |
@@ -85,14 +108,14 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 ## Workflows n8n
 
-| Workflow | Statut |
-|----------|--------|
-| Prospection → enrichissement → email Claude → CRM | ⬜ À faire |
-| Analyse réponses emails → scoring → statut prospect | ⬜ À faire |
-| Génération devis → envoi → relance | ⬜ À faire |
-| Onboarding client → projet → repo GitHub → email bienvenue | ⬜ À faire |
-| Facturation livraison → relances paiement | ⬜ À faire |
-| Weekly review chaque lundi → résumé Claude → notification | ⬜ À faire |
+| Workflow | Statut | Notes |
+|----------|--------|-------|
+| Analyse prospect → scraping → scoring Claude → CRM | ✅ Fait | Webhook `/webhook/prospect-analysis` — déclenché à la création d'un prospect avec URL |
+| Analyse réponses emails → scoring → statut prospect | ⬜ À faire | — |
+| Génération devis → envoi → relance | ⬜ À faire | — |
+| Onboarding client → projet → repo GitHub → email bienvenue | ⬜ À faire | — |
+| Facturation livraison → relances paiement | ⬜ À faire | — |
+| Weekly review chaque lundi → résumé Claude → notification | ⬜ À faire | — |
 
 ---
 

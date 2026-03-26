@@ -20,36 +20,53 @@ export async function POST(request: NextRequest) {
     messages: [
       {
         role: "user",
-        content: `Tu analyses un prospect pour DeepShift, auto-entreprise IT spécialisée en web apps sur mesure et consulting transformation digitale.
+        content: `Tu es un expert en développement commercial. Tu évalues le potentiel business d'un prospect pour Pierre Connes (DeepShift), freelance IT qui crée des sites web, web apps sur mesure et fait du consulting digital pour des PME/TPE/indépendants.
 
-Prospect :
+Pierre peut apporter de la valeur à une entreprise si :
+- Elle n'a pas de site web ou seulement une page Facebook/Instagram (opportunité énorme)
+- Son site est daté, non mobile, lent ou sans tunnel de conversion
+- Elle a besoin d'une web app, d'une automatisation ou d'une intégration API
+- C'est une PME/TPE avec un vrai CA mais peu de présence digitale
+- Elle est dans un secteur où le digital fait la différence (restauration, artisanat, commerce local, services, immobilier, santé, etc.)
+
+Pierre NE peut PAS apporter de valeur si :
+- C'est une grande entreprise tech (Salesforce, Google, SAP, Oracle…) qui a déjà ses équipes
+- C'est une agence web / boîte IT concurrente
+- C'est un particulier sans budget
+- L'entreprise a déjà une présence digitale solide et des développeurs en interne
+
+Prospect à analyser :
 - Nom : ${prospect.name}
 - Entreprise : ${prospect.company ?? "inconnue"}
 - Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
 - Source : ${prospect.source ?? "inconnue"}
-- Email initial : ${firstEmail?.body ?? "aucun email disponible"}
+- Budget estimé : ${prospect.estimatedBudget ? `${prospect.estimatedBudget} €` : "inconnu"}
+${prospect.companyDescription ? `- Description / contexte : ${prospect.companyDescription}` : ""}
+- Premier contact : ${firstEmail?.body ?? "aucun email disponible"}
 
-Score de 1 à 10 selon ces critères :
-- Fit avec les services DeepShift (web app, consulting digital) : /4
-- Budget apparent (taille entreprise, secteur, signaux) : /3
-- Urgence détectée : /2
-- Facilité de collaboration estimée : /1
+Donne un score de 0 à 10 représentant le potentiel de chiffre d'affaires pour DeepShift :
+- 9-10 : Client idéal, besoin évident, budget probable, Pierre peut transformer leur situation
+- 7-8 : Bon prospect, besoin réel, quelques inconnues
+- 5-6 : Potentiel moyen, à qualifier
+- 3-4 : Peu probable, besoin flou ou budget insuffisant
+- 0-2 : Pas de valeur ajoutée possible pour DeepShift
 
 Réponds UNIQUEMENT en JSON :
 {
-  "score": 7,
-  "reason": "PME avec besoin clair de refonte web, budget probable 5-15k, urgence modérée",
-  "tags": ["webapp", "pme", "refonte"],
-  "recommended_action": "Proposer un call de 30min cette semaine"
+  "score": 9,
+  "reason": "Restaurant avec 80k€ de CA annuel et seulement une page Facebook — pas de site, zéro présence Google. Pierre peut leur apporter un vrai site vitrine + réservation en ligne pour un contrat 2-4k€.",
+  "tags": ["site-vitrine", "pme", "restauration"],
+  "recommended_action": "Contacter rapidement avec une démo de ce que leur site pourrait ressembler"
 }`,
       },
     ],
   });
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
   let parsed: { score?: number; reason?: string; tags?: string[]; recommended_action?: string } = {};
   try {
-    parsed = JSON.parse(raw);
+    parsed = JSON.parse(jsonMatch?.[0] ?? "{}");
   } catch {
     // parsing failed
   }

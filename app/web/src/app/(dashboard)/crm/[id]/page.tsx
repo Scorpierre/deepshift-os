@@ -1,136 +1,516 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft, Loader2, Sparkles, Mail, StickyNote,
-  Bell, Pencil, Check, Globe, ExternalLink, Trash2,
+  ArrowLeft, Bell, Check, ChevronDown, Euro, ExternalLink,
+  FileText, Globe, Loader2, Mail, Pencil, Plus, Send,
+  Sparkles, Tag, Trash2, X,
 } from "lucide-react";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type ProspectStatus =
   | "NEW" | "CONTACTED" | "QUALIFIED" | "PROPOSAL_SENT"
   | "NEGOTIATION" | "WON" | "LOST" | "ARCHIVED";
 
 const STATUS_LABELS: Record<ProspectStatus, string> = {
-  NEW: "Nouveau", CONTACTED: "Contacté", QUALIFIED: "Qualifié",
-  PROPOSAL_SENT: "Devis envoyé", NEGOTIATION: "Négociation",
-  WON: "Signé", LOST: "Perdu", ARCHIVED: "Archivé",
+  NEW: "Nouveau",
+  CONTACTED: "Contacté",
+  QUALIFIED: "Qualifié",
+  PROPOSAL_SENT: "Devis envoyé",
+  NEGOTIATION: "Négociation",
+  WON: "Signé",
+  LOST: "Perdu",
+  ARCHIVED: "Archivé",
 };
 
 const STATUS_COLORS: Record<ProspectStatus, string> = {
-  NEW: "bg-slate-500/20 text-slate-300",
-  CONTACTED: "bg-blue-500/20 text-blue-300",
-  QUALIFIED: "bg-violet-500/20 text-violet-300",
-  PROPOSAL_SENT: "bg-amber-500/20 text-amber-300",
-  NEGOTIATION: "bg-orange-500/20 text-orange-300",
-  WON: "bg-emerald-500/20 text-emerald-300",
-  LOST: "bg-red-500/20 text-red-300",
-  ARCHIVED: "bg-muted text-muted-foreground",
+  NEW: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+  CONTACTED: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+  QUALIFIED: "bg-violet-500/20 text-violet-300 border-violet-500/30",
+  PROPOSAL_SENT: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+  NEGOTIATION: "bg-orange-500/20 text-orange-300 border-orange-500/30",
+  WON: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  LOST: "bg-red-500/20 text-red-300 border-red-500/30",
+  ARCHIVED: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
 };
 
-type Note = { id: string; createdAt: string; content: string; source: string | null };
+const NEED_TYPES = ["webapp", "site", "consulting", "api", "ecommerce", "autre"];
+const SOURCES = ["LinkedIn", "Référence", "GitHub", "Site web", "Réseau", "Autre"];
+
+type EmailEntry = {
+  id: string;
+  sentAt: string;
+  direction: "SENT" | "RECEIVED";
+  subject: string;
+  body: string;
+  aiAnalysis: string | null;
+  aiIntent: string | null;
+};
+
+type NoteEntry = {
+  id: string;
+  createdAt: string;
+  content: string;
+  source: string | null;
+};
+
 type Reminder = {
-  id: string; dueAt: string; note: string;
-  status: "PENDING" | "DONE" | "SNOOZED"; type: string;
-};
-type Prospect = {
-  id: string; name: string; company: string | null; email: string;
-  phone: string | null; linkedinUrl: string | null; websiteUrl: string | null;
-  status: ProspectStatus; score: number | null;
-  needType: string[]; estimatedBudget: number | null; source: string | null;
-  lastContactedAt: string | null; nextActionAt: string | null; nextActionNote: string | null;
-  aiSummary: string | null; aiScoreReason: string | null;
-  notes: Note[]; reminders: Reminder[];
+  id: string;
+  dueAt: string;
+  note: string;
+  status: "PENDING" | "DONE" | "SNOOZED";
+  type: string;
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+type Prospect = {
+  id: string;
+  name: string;
+  company: string | null;
+  email: string;
+  phone: string | null;
+  linkedinUrl: string | null;
+  websiteUrl: string | null;
+  status: ProspectStatus;
+  score: number | null;
+  needType: string[];
+  estimatedBudget: number | null;
+  source: string | null;
+  lastContactedAt: string | null;
+  nextActionAt: string | null;
+  nextActionNote: string | null;
+  companyDescription: string | null;
+  aiSummary: string | null;
+  aiScoreReason: string | null;
+  emails: EmailEntry[];
+  notes: NoteEntry[];
+  reminders: Reminder[];
+};
+
+type EmailDraft = {
+  subject: string;
+  body: string;
+  insights?: string[];
+  scraped?: boolean;
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function scoreColor(s: number | null) {
-  if (s === null) return "bg-muted text-muted-foreground";
+  if (s === null) return "bg-zinc-500/20 text-zinc-400";
   if (s >= 8) return "bg-emerald-500/20 text-emerald-400";
   if (s >= 5) return "bg-amber-500/20 text-amber-400";
   return "bg-red-500/20 text-red-400";
 }
 
-function fmt(d: string | null) {
+function fmtDate(d: string | null) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+  return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function urlLabel(url: string) {
-  try {
-    const h = new URL(url).hostname.replace(/^www\./, "");
-    return h.length > 28 ? h.slice(0, 28) + "…" : h;
-  } catch {
-    return url.slice(0, 30);
-  }
+function fmtDatetime(d: string | null) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("fr-FR", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
 }
 
-// ─── Editable inline field ────────────────────────────────────────────────────
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
 
-function EditableUrl({
-  label, value, icon: Icon, onSave,
+// ─── Section wrapper ──────────────────────────────────────────────────────────
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2.5">
+      <h3 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">
+        {title}
+      </h3>
+      <div className="space-y-2">{children}</div>
+    </div>
+  );
+}
+
+// ─── InlineField ──────────────────────────────────────────────────────────────
+
+function InlineField({
+  label, value, placeholder, onSave, type = "text",
 }: {
   label: string;
   value: string | null;
-  icon: React.ElementType;
-  onSave: (v: string) => void;
+  placeholder?: string;
+  onSave: (v: string | null) => void;
+  type?: "text" | "email" | "tel" | "number" | "url" | "date";
 }) {
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState(value ?? "");
+  const ref = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+  useEffect(() => { if (!editing) setInput(value ?? ""); }, [value, editing]);
 
   function save() {
     setEditing(false);
-    onSave(input.trim());
+    const trimmed = input.trim();
+    onSave(trimmed === "" ? null : trimmed);
   }
 
   return (
-    <div>
-      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+    <div className="flex flex-col gap-0.5">
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</span>
       {editing ? (
-        <div className="flex gap-1">
-          <input
-            autoFocus
-            type="url"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
-            className="flex-1 border border-primary rounded-md px-2 py-0.5 text-sm bg-background"
-            placeholder="https://..."
-          />
-          <button onClick={save} className="text-xs text-primary px-2 py-1 hover:bg-muted rounded">OK</button>
-        </div>
+        <input
+          ref={ref}
+          type={type}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") save();
+            if (e.key === "Escape") { setInput(value ?? ""); setEditing(false); }
+          }}
+          className="text-sm bg-background border border-primary/50 rounded-lg px-2 py-1 outline-none focus:border-primary transition-colors"
+          placeholder={placeholder}
+        />
       ) : (
-        <div className="flex items-center gap-1.5 group">
-          {value ? (
-            <>
-              <a
-                href={value} target="_blank" rel="noopener noreferrer"
-                className="flex items-center gap-1 text-sm text-primary hover:underline truncate"
-              >
-                <Icon size={12} className="shrink-0" />
-                {urlLabel(value)}
-                <ExternalLink size={10} className="shrink-0 opacity-50" />
-              </a>
-            </>
-          ) : (
-            <span className="text-sm text-muted-foreground/50">Non renseigné</span>
-          )}
-          <button
-            onClick={() => { setInput(value ?? ""); setEditing(true); }}
-            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-          >
-            <Pencil size={11} />
-          </button>
-        </div>
+        <button
+          onClick={() => setEditing(true)}
+          className="group/f text-sm text-left flex items-center gap-1.5"
+        >
+          <span className={value ? "text-foreground" : "text-muted-foreground/40 italic"}>
+            {value ?? placeholder ?? "—"}
+          </span>
+          <Pencil
+            size={10}
+            className="opacity-0 group-hover/f:opacity-50 transition-opacity text-muted-foreground shrink-0"
+          />
+        </button>
       )}
     </div>
   );
 }
 
-// ─── Page ────────────────────────────────────────────────────────────────────
+// ─── InlineSelect ─────────────────────────────────────────────────────────────
+
+function InlineSelect({
+  label, value, options, onSave,
+}: {
+  label: string;
+  value: string | null;
+  options: { value: string; label: string }[];
+  onSave: (v: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const current = options.find((o) => o.value === value);
+
+  return (
+    <div className="flex flex-col gap-0.5 relative">
+      <span className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</span>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="text-sm text-left flex items-center gap-1 hover:text-foreground/80 transition-colors"
+      >
+        <span className={current ? "text-foreground" : "text-muted-foreground/40 italic"}>
+          {current?.label ?? "—"}
+        </span>
+        <ChevronDown size={10} className="text-muted-foreground shrink-0" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-xl py-1 min-w-36">
+            {options.map((o) => (
+              <button
+                key={o.value}
+                onClick={() => { setOpen(false); onSave(o.value); }}
+                className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted transition-colors ${
+                  value === o.value ? "font-medium text-primary" : ""
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── StatusDropdown ───────────────────────────────────────────────────────────
+
+function StatusDropdown({
+  value, onChange,
+}: {
+  value: ProspectStatus;
+  onChange: (s: ProspectStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${STATUS_COLORS[value]}`}
+      >
+        {STATUS_LABELS[value]}
+        <ChevronDown size={10} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-border rounded-xl shadow-xl py-1 min-w-44">
+            {(Object.keys(STATUS_LABELS) as ProspectStatus[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => { setOpen(false); onChange(s); }}
+                className={`w-full text-left px-4 py-1.5 text-sm hover:bg-muted transition-colors ${
+                  s === value ? "font-medium text-primary" : ""
+                }`}
+              >
+                {STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── AutoTextarea ─────────────────────────────────────────────────────────────
+
+function AutoTextarea({
+  value, placeholder, onSave,
+}: {
+  value: string | null;
+  placeholder?: string;
+  onSave: (v: string | null) => void;
+}) {
+  const [text, setText] = useState(value ?? "");
+  const [saved, setSaved] = useState(false);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (document.activeElement !== ref.current) setText(value ?? "");
+  }, [value]);
+
+  function resize() {
+    if (ref.current) {
+      ref.current.style.height = "auto";
+      ref.current.style.height = `${ref.current.scrollHeight}px`;
+    }
+  }
+
+  useEffect(() => { resize(); }, [text]);
+
+  function handleBlur() {
+    onSave(text.trim() || null);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  }
+
+  return (
+    <div className="relative">
+      <textarea
+        ref={ref}
+        value={text}
+        onChange={(e) => { setText(e.target.value); resize(); }}
+        onBlur={handleBlur}
+        placeholder={placeholder}
+        rows={3}
+        className="w-full text-sm bg-muted/30 border border-border rounded-xl px-3 py-2.5 resize-none outline-none focus:border-primary/40 focus:bg-background transition-all placeholder:text-muted-foreground/35 leading-relaxed"
+      />
+      {saved && (
+        <span className="absolute bottom-2.5 right-3 text-[10px] text-emerald-400 pointer-events-none animate-in fade-in duration-150">
+          Sauvegardé
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─── Timeline entry ───────────────────────────────────────────────────────────
+
+type TimelineItem =
+  | { kind: "email"; id: string; date: string; direction: "SENT" | "RECEIVED"; subject: string; body: string; aiAnalysis: string | null }
+  | { kind: "note"; id: string; date: string; content: string; source: string | null };
+
+function TimelineEntry({ item }: { item: TimelineItem }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (item.kind === "email") {
+    return (
+      <div className="relative pl-8">
+        <div className="absolute left-0 top-1 size-6 rounded-full bg-blue-500/15 border border-blue-400/30 flex items-center justify-center shrink-0">
+          {item.direction === "SENT"
+            ? <Send size={11} className="text-blue-400" />
+            : <Mail size={11} className="text-blue-400" />}
+        </div>
+        <div className="border border-border rounded-xl overflow-hidden">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="w-full text-left px-3 py-2.5 flex items-start justify-between gap-2 hover:bg-muted/30 transition-colors"
+          >
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{item.subject}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {item.direction === "SENT" ? "Envoyé" : "Reçu"} · {fmtDatetime(item.date)}
+              </p>
+            </div>
+            <ChevronDown
+              size={13}
+              className={`shrink-0 text-muted-foreground mt-0.5 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
+            />
+          </button>
+          {expanded && (
+            <div className="border-t border-border px-3 py-2.5 space-y-2 animate-in fade-in duration-150">
+              <pre className="text-sm text-foreground/80 whitespace-pre-wrap font-sans leading-relaxed">
+                {item.body}
+              </pre>
+              {item.aiAnalysis && (
+                <p className="text-xs text-violet-300 bg-violet-500/10 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
+                  <Sparkles size={10} className="shrink-0 mt-0.5" />
+                  {item.aiAnalysis}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative pl-8">
+      <div className="absolute left-0 top-1 size-6 rounded-full bg-muted border border-border flex items-center justify-center shrink-0">
+        <FileText size={11} className="text-muted-foreground" />
+      </div>
+      <div className="bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5">
+        <p className="text-sm leading-relaxed">{item.content}</p>
+        <p className="text-xs text-muted-foreground mt-1">{fmtDatetime(item.date)}</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Email Modal ──────────────────────────────────────────────────────────────
+
+function EmailModal({ prospectId, onClose }: { prospectId: string; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [draft, setDraft] = useState<EmailDraft | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/ai/draft-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prospectId }),
+    })
+      .then((r) => r.json())
+      .then(setDraft)
+      .finally(() => setLoading(false));
+  }, [prospectId]);
+
+  function copy() {
+    if (!draft) return;
+    navigator.clipboard.writeText(`Objet : ${draft.subject}\n\n${draft.body}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[82vh] flex flex-col animate-in zoom-in-95 duration-200">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+          <h2 className="font-semibold text-sm flex items-center gap-2">
+            <Sparkles size={15} className="text-violet-400" />
+            Email rédigé par Claude
+          </h2>
+          <div className="flex items-center gap-2">
+            {draft && (
+              <button
+                onClick={copy}
+                className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                  copied
+                    ? "bg-emerald-500/20 text-emerald-400"
+                    : "bg-muted text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {copied ? "Copié !" : "Copier"}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 p-5 space-y-4">
+          {loading ? (
+            <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
+              <Loader2 size={22} className="animate-spin text-violet-400" />
+              <p className="text-sm">Analyse du prospect en cours…</p>
+              <p className="text-xs opacity-50">Scraping de la présence en ligne si disponible</p>
+            </div>
+          ) : draft ? (
+            <>
+              {draft.scraped && (
+                <p className="text-xs text-blue-400/70 flex items-center gap-1.5">
+                  <Globe size={11} />
+                  Personnalisé avec l'analyse de leur présence en ligne
+                </p>
+              )}
+              {draft.insights && draft.insights.length > 0 && (
+                <div className="bg-muted/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                    Observations
+                  </p>
+                  {draft.insights.map((insight, i) => (
+                    <p key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                      <span className="text-blue-400 shrink-0">·</span>
+                      {insight}
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div className="border border-border rounded-xl p-4 space-y-3">
+                <p className="text-sm">
+                  <span className="text-xs text-muted-foreground">Objet : </span>
+                  <span className="font-medium">{draft.subject}</span>
+                </p>
+                <div className="border-t border-border pt-3">
+                  <pre className="text-sm text-foreground/80 whitespace-pre-wrap font-sans leading-relaxed">
+                    {draft.body}
+                  </pre>
+                </div>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-12">
+              Erreur lors de la génération.
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ProspectPage() {
   const { id } = useParams<{ id: string }>();
@@ -139,15 +519,14 @@ export default function ProspectPage() {
   const [prospect, setProspect] = useState<Prospect | null>(null);
   const [loading, setLoading] = useState(true);
   const [scoring, setScoring] = useState(false);
-  const [drafting, setDrafting] = useState(false);
-  const [draft, setDraft] = useState<{
-    subject: string; body: string; insights?: string[]; scraped?: boolean;
-  } | null>(null);
-  const [noteContent, setNoteContent] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
-  const [editingStatus, setEditingStatus] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [noteContent, setNoteContent] = useState("");
+  const [savingNote, setSavingNote] = useState(false);
+  const [showReminderForm, setShowReminderForm] = useState(false);
+  const [newReminder, setNewReminder] = useState({ note: "", dueAt: "" });
+  const [addingReminder, setAddingReminder] = useState(false);
 
   useEffect(() => {
     fetch(`/api/prospects/${id}`)
@@ -156,15 +535,18 @@ export default function ProspectPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  async function patchProspect(data: Partial<Prospect>) {
-    const res = await fetch(`/api/prospects/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const updated = await res.json();
-    setProspect((p) => p ? { ...p, ...updated } : p);
-  }
+  const patchProspect = useCallback(
+    async (data: Partial<Prospect>) => {
+      const res = await fetch(`/api/prospects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const updated = await res.json();
+      setProspect((p) => (p ? { ...p, ...updated } : p));
+    },
+    [id]
+  );
 
   async function scoreProspect() {
     setScoring(true);
@@ -174,24 +556,13 @@ export default function ProspectPage() {
       body: JSON.stringify({ prospectId: id }),
     });
     const updated = await res.json();
-    setProspect((p) => p ? { ...p, score: updated.score, aiScoreReason: updated.aiScoreReason } : p);
+    setProspect((p) =>
+      p ? { ...p, score: updated.score, aiScoreReason: updated.aiScoreReason } : p
+    );
     setScoring(false);
   }
 
-  async function draftEmail() {
-    setDrafting(true);
-    setDraft(null);
-    const res = await fetch("/api/ai/draft-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prospectId: id }),
-    });
-    const data = await res.json();
-    setDraft(data);
-    setDrafting(false);
-  }
-
-  async function addNote(e: React.SubmitEvent<HTMLFormElement>) {
+  async function addNote(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!noteContent.trim()) return;
     setSavingNote(true);
@@ -201,15 +572,25 @@ export default function ProspectPage() {
       body: JSON.stringify({ content: noteContent }),
     });
     const note = await res.json();
-    setProspect((p) => p ? { ...p, notes: [note, ...p.notes] } : p);
+    setProspect((p) => (p ? { ...p, notes: [note, ...p.notes] } : p));
     setNoteContent("");
     setSavingNote(false);
   }
 
-  async function deleteProspect() {
-    setDeleting(true);
-    await fetch(`/api/prospects/${id}`, { method: "DELETE" });
-    router.push("/crm");
+  async function addReminder(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!newReminder.note.trim() || !newReminder.dueAt) return;
+    setAddingReminder(true);
+    const res = await fetch("/api/reminders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prospectId: id, ...newReminder, type: "CUSTOM" }),
+    });
+    const reminder = await res.json();
+    setProspect((p) => (p ? { ...p, reminders: [...p.reminders, reminder] } : p));
+    setNewReminder({ note: "", dueAt: "" });
+    setAddingReminder(false);
+    setShowReminderForm(false);
   }
 
   async function doneReminder(reminderId: string) {
@@ -219,278 +600,431 @@ export default function ProspectPage() {
       body: JSON.stringify({ status: "DONE" }),
     });
     setProspect((p) =>
-      p ? { ...p, reminders: p.reminders.map((r) => r.id === reminderId ? { ...r, status: "DONE" as const } : r) } : p
+      p
+        ? {
+            ...p,
+            reminders: p.reminders.map((r) =>
+              r.id === reminderId ? { ...r, status: "DONE" as const } : r
+            ),
+          }
+        : p
     );
   }
 
-  if (loading) return (
-    <div className="flex-1 flex items-center justify-center">
-      <Loader2 className="animate-spin text-muted-foreground" size={24} />
-    </div>
-  );
+  async function deleteProspect() {
+    setDeleting(true);
+    await fetch(`/api/prospects/${id}`, { method: "DELETE" });
+    router.push("/crm");
+  }
 
-  if (!prospect) return (
-    <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-      Prospect introuvable.
-    </div>
-  );
+  // ── Loading / Error states ──────────────────────────────────────────────────
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="animate-spin text-muted-foreground" size={22} />
+      </div>
+    );
+  }
+
+  if (!prospect) {
+    return (
+      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+        Prospect introuvable.
+      </div>
+    );
+  }
+
+  // ── Derived data ────────────────────────────────────────────────────────────
+
+  const timeline: TimelineItem[] = [
+    ...prospect.emails.map((e): TimelineItem => ({
+      kind: "email",
+      id: e.id,
+      date: e.sentAt,
+      direction: e.direction,
+      subject: e.subject,
+      body: e.body,
+      aiAnalysis: e.aiAnalysis,
+    })),
+    ...prospect.notes.map((n): TimelineItem => ({
+      kind: "note",
+      id: n.id,
+      date: n.createdAt,
+      content: n.content,
+      source: n.source,
+    })),
+  ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const pendingReminders = prospect.reminders.filter((r) => r.status === "PENDING");
-  const hasUrl = !!(prospect.websiteUrl || prospect.linkedinUrl);
+  const availableTags = NEED_TYPES.filter((t) => !prospect.needType.includes(t));
+
+  // ── Render ──────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center gap-3 px-6 py-4 border-b border-border shrink-0">
-        <button onClick={() => router.push("/crm")} className="text-muted-foreground hover:text-foreground">
-          <ArrowLeft size={18} />
-        </button>
-        <div className="flex-1 min-w-0">
-          <h1 className="text-lg font-semibold truncate">{prospect.name}</h1>
-          {prospect.company && <p className="text-xs text-muted-foreground">{prospect.company}</p>}
-        </div>
-        <span className={`text-sm font-bold px-2.5 py-1 rounded-full ${scoreColor(prospect.score)}`}>
-          {prospect.score !== null ? `${prospect.score}/10` : "—"}
-        </span>
+    <>
+      {emailModalOpen && (
+        <EmailModal prospectId={id} onClose={() => setEmailModalOpen(false)} />
+      )}
 
-        {/* Supprimer */}
-        {confirmDelete ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">Supprimer ?</span>
-            <button
-              onClick={deleteProspect}
-              disabled={deleting}
-              className="flex items-center gap-1 text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500/30 disabled:opacity-50 transition-colors"
-            >
-              {deleting ? <Loader2 size={10} className="animate-spin" /> : null}
-              Confirmer
-            </button>
-            <button
-              onClick={() => setConfirmDelete(false)}
-              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
-            >
-              Annuler
-            </button>
+      <div className="flex flex-col h-full overflow-hidden">
+
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <header className="flex items-center gap-3 px-5 py-3 border-b border-border shrink-0 bg-background/95 backdrop-blur-sm">
+          <button
+            onClick={() => router.push("/crm")}
+            className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted"
+          >
+            <ArrowLeft size={16} />
+          </button>
+
+          {/* Avatar */}
+          <div className="size-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+            {initials(prospect.name)}
           </div>
-        ) : (
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="text-muted-foreground hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"
-            title="Supprimer le prospect"
-          >
-            <Trash2 size={15} />
-          </button>
-        )}
 
-        <div className="relative">
-          <button
-            onClick={() => setEditingStatus((v) => !v)}
-            className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full ${STATUS_COLORS[prospect.status]}`}
-          >
-            {STATUS_LABELS[prospect.status]}
-            <Pencil size={10} />
-          </button>
-          {editingStatus && (
-            <div className="absolute right-0 top-full mt-1 z-10 bg-card border border-border rounded-xl shadow-lg py-1 min-w-40">
-              {(Object.keys(STATUS_LABELS) as ProspectStatus[]).map((s) => (
-                <button key={s} onClick={() => { setEditingStatus(false); patchProspect({ status: s }); }}
-                  className="w-full text-left px-4 py-1.5 text-sm hover:bg-muted">
-                  {STATUS_LABELS[s]}
-                </button>
-              ))}
+          <div className="flex-1 min-w-0">
+            <h1 className="font-semibold text-sm truncate">{prospect.name}</h1>
+            {prospect.company && (
+              <p className="text-xs text-muted-foreground truncate">{prospect.company}</p>
+            )}
+          </div>
+
+          {/* Score */}
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${scoreColor(prospect.score)}`}>
+            {prospect.score !== null ? `${prospect.score}/10` : "—"}
+          </span>
+
+          {/* Status */}
+          <StatusDropdown
+            value={prospect.status}
+            onChange={(s) => patchProspect({ status: s })}
+          />
+
+          {/* Delete */}
+          {confirmDelete ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Supprimer ?</span>
+              <button
+                onClick={deleteProspect}
+                disabled={deleting}
+                className="flex items-center gap-1 text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500/30 disabled:opacity-50 transition-colors"
+              >
+                {deleting && <Loader2 size={10} className="animate-spin" />}
+                Confirmer
+              </button>
+              <button
+                onClick={() => setConfirmDelete(false)}
+                className="text-xs text-muted-foreground hover:text-foreground px-2 py-1.5"
+              >
+                Annuler
+              </button>
             </div>
+          ) : (
+            <button
+              onClick={() => setConfirmDelete(true)}
+              className="text-muted-foreground hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10"
+            >
+              <Trash2 size={14} />
+            </button>
           )}
-        </div>
-      </div>
+        </header>
 
-      <div className="flex flex-col gap-6 p-6 max-w-3xl w-full mx-auto">
+        {/* ── 3-column body ───────────────────────────────────────────────── */}
+        <div className="grid grid-cols-[260px_1fr_260px] flex-1 overflow-hidden divide-x divide-border">
 
-        {/* Infos contact */}
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Email</p>
-            <a href={`mailto:${prospect.email}`} className="text-sm text-primary hover:underline">{prospect.email}</a>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Téléphone</p>
-            <p className="text-sm">{prospect.phone ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Source</p>
-            <p className="text-sm">{prospect.source ?? "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Budget estimé</p>
-            <p className="text-sm">{prospect.estimatedBudget ? `${prospect.estimatedBudget.toLocaleString("fr-FR")} €` : "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Besoin</p>
-            <p className="text-sm">{prospect.needType.join(", ") || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground mb-0.5">Dernier contact</p>
-            <p className="text-sm">{fmt(prospect.lastContactedAt)}</p>
-          </div>
+          {/* ── LEFT : infos contact ──────────────────────────────────────── */}
+          <aside className="overflow-y-auto p-4 space-y-6">
 
-          {/* URLs éditables inline */}
-          <EditableUrl
-            label="Site web"
-            value={prospect.websiteUrl}
-            icon={Globe}
-            onSave={(v) => patchProspect({ websiteUrl: v || null } as Partial<Prospect>)}
-          />
-          <EditableUrl
-            label="LinkedIn / Facebook"
-            value={prospect.linkedinUrl}
-            icon={ExternalLink}
-            onSave={(v) => patchProspect({ linkedinUrl: v || null } as Partial<Prospect>)}
-          />
-        </div>
+            <Section title="Contact">
+              <InlineField
+                label="Nom"
+                value={prospect.name}
+                onSave={(v) => patchProspect({ name: v ?? "" })}
+              />
+              <InlineField
+                label="Email"
+                value={prospect.email}
+                type="email"
+                onSave={(v) => patchProspect({ email: v ?? "" })}
+              />
+              <InlineField
+                label="Entreprise"
+                value={prospect.company}
+                placeholder="Non renseigné"
+                onSave={(v) => patchProspect({ company: v })}
+              />
+              <InlineField
+                label="Téléphone"
+                value={prospect.phone}
+                type="tel"
+                placeholder="Non renseigné"
+                onSave={(v) => patchProspect({ phone: v })}
+              />
+              <InlineSelect
+                label="Source"
+                value={prospect.source}
+                options={SOURCES.map((s) => ({ value: s, label: s }))}
+                onSave={(v) => patchProspect({ source: v })}
+              />
+              <InlineField
+                label="Score IA"
+                value={prospect.score !== null ? String(prospect.score) : null}
+                type="number"
+                placeholder="1 – 10"
+                onSave={(v) => patchProspect({ score: v ? parseInt(v, 10) : null })}
+              />
+            </Section>
 
-        {/* IA */}
-        <section className="border border-border rounded-xl p-4 flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Sparkles size={14} className="text-violet-400" />
-              Analyse IA
-            </h2>
-            <div className="flex gap-2">
+            <Section title="Liens">
+              <InlineField
+                label="Site web"
+                value={prospect.websiteUrl}
+                type="url"
+                placeholder="https://…"
+                onSave={(v) => patchProspect({ websiteUrl: v })}
+              />
+              <InlineField
+                label="LinkedIn / Facebook"
+                value={prospect.linkedinUrl}
+                type="url"
+                placeholder="https://…"
+                onSave={(v) => patchProspect({ linkedinUrl: v })}
+              />
+            </Section>
+
+            {(prospect.aiScoreReason || prospect.aiSummary) && (
+              <Section title="Analyse IA">
+                {prospect.aiScoreReason && (
+                  <p className="text-xs text-muted-foreground bg-violet-500/8 border border-violet-500/15 rounded-xl px-2.5 py-2 leading-relaxed">
+                    {prospect.aiScoreReason}
+                  </p>
+                )}
+                {prospect.aiSummary && (
+                  <p className="text-xs text-muted-foreground/70 leading-relaxed">
+                    {prospect.aiSummary}
+                  </p>
+                )}
+              </Section>
+            )}
+
+          </aside>
+
+          {/* ── CENTER : description + timeline ──────────────────────────── */}
+          <main className="overflow-y-auto p-4 space-y-6">
+
+            <Section title="Description entreprise">
+              <AutoTextarea
+                value={prospect.companyDescription}
+                placeholder="Notes libres sur l'entreprise, contexte, observations, pain points…"
+                onSave={(v) => patchProspect({ companyDescription: v })}
+              />
+            </Section>
+
+            <Section title={`Timeline · ${timeline.length} événement${timeline.length !== 1 ? "s" : ""}`}>
+              {/* Add note */}
+              <form onSubmit={addNote} className="flex gap-2 mb-3">
+                <input
+                  value={noteContent}
+                  onChange={(e) => setNoteContent(e.target.value)}
+                  placeholder="Ajouter une note…"
+                  className="flex-1 text-sm bg-muted/30 border border-border rounded-xl px-3 py-2 outline-none focus:border-primary/40 transition-colors placeholder:text-muted-foreground/35"
+                />
+                <button
+                  type="submit"
+                  disabled={savingNote || !noteContent.trim()}
+                  className="text-sm bg-primary text-primary-foreground px-3 py-2 rounded-xl hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
+                >
+                  {savingNote ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                </button>
+              </form>
+
+              {timeline.length > 0 ? (
+                <div className="space-y-3">
+                  {timeline.map((item) => (
+                    <TimelineEntry key={`${item.kind}-${item.id}`} item={item} />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground/35 text-center py-8">
+                  Aucune activité pour l'instant.
+                </p>
+              )}
+            </Section>
+
+          </main>
+
+          {/* ── RIGHT : actions, rappels, budget, tags ────────────────────── */}
+          <aside className="overflow-y-auto p-4 space-y-6">
+
+            <Section title="Actions rapides">
               <button
                 onClick={scoreProspect}
                 disabled={scoring}
-                className="flex items-center gap-1.5 text-xs bg-violet-500/20 text-violet-300 px-3 py-1.5 rounded-lg hover:bg-violet-500/30 disabled:opacity-50 transition-colors"
+                className="w-full flex items-center justify-center gap-2 text-sm bg-violet-500/12 text-violet-300 border border-violet-500/20 px-3 py-2 rounded-xl hover:bg-violet-500/20 disabled:opacity-50 transition-all"
               >
-                {scoring && <Loader2 size={10} className="animate-spin" />}
-                Scorer
+                {scoring ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+                {scoring ? "Scoring…" : "Scorer IA"}
               </button>
               <button
-                onClick={draftEmail}
-                disabled={drafting}
-                className="flex items-center gap-1.5 text-xs bg-blue-500/20 text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-500/30 disabled:opacity-50 transition-colors"
+                onClick={() => setEmailModalOpen(true)}
+                className="w-full flex items-center justify-center gap-2 text-sm bg-blue-500/12 text-blue-300 border border-blue-500/20 px-3 py-2 rounded-xl hover:bg-blue-500/20 transition-all"
               >
-                {drafting ? <Loader2 size={10} className="animate-spin" /> : <Mail size={10} />}
-                {drafting ? "Analyse en cours…" : "Rédiger email"}
+                <Mail size={13} />
+                Générer email
               </button>
-            </div>
-          </div>
+            </Section>
 
-          {/* Indicateur URL utilisée */}
-          {hasUrl && (
-            <p className="text-[11px] text-muted-foreground/60 flex items-center gap-1">
-              <Globe size={10} />
-              Claude analysera {prospect.websiteUrl ? urlLabel(prospect.websiteUrl) : urlLabel(prospect.linkedinUrl!)} pour personnaliser l'email
-            </p>
-          )}
-          {!hasUrl && (
-            <p className="text-[11px] text-amber-400/70">
-              ↑ Ajoute le site ou la page Facebook pour un email vraiment personnalisé
-            </p>
-          )}
+            <Section title="Prochaine action">
+              <InlineField
+                label="Note"
+                value={prospect.nextActionNote}
+                placeholder="Que faire ?"
+                onSave={(v) => patchProspect({ nextActionNote: v })}
+              />
+              <InlineField
+                label="Date"
+                value={
+                  prospect.nextActionAt
+                    ? new Date(prospect.nextActionAt).toISOString().slice(0, 10)
+                    : null
+                }
+                type="date"
+                onSave={(v) =>
+                  patchProspect({ nextActionAt: v ? new Date(v).toISOString() : null })
+                }
+              />
+            </Section>
 
-          {prospect.aiScoreReason && (
-            <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-              {prospect.aiScoreReason}
-            </p>
-          )}
-          {prospect.aiSummary ? (
-            <p className="text-sm text-muted-foreground whitespace-pre-line">{prospect.aiSummary}</p>
-          ) : hasUrl ? (
-            <p className="text-xs text-muted-foreground/50 flex items-center gap-1.5">
-              <Loader2 size={10} className="animate-spin" />
-              Analyse en cours — disponible dans quelques secondes
-            </p>
-          ) : null}
-        </section>
+            <Section title="Budget">
+              <InlineField
+                label="Estimé (€)"
+                value={prospect.estimatedBudget !== null ? String(prospect.estimatedBudget) : null}
+                type="number"
+                placeholder="ex: 5000"
+                onSave={(v) =>
+                  patchProspect({ estimatedBudget: v ? parseFloat(v) : null })
+                }
+              />
+            </Section>
 
-        {/* Draft email */}
-        {draft && (
-          <section className="border border-blue-400/30 rounded-xl p-4 flex flex-col gap-3 bg-blue-500/5">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-blue-300 uppercase tracking-wide">
-                Email rédigé par Claude
-                {draft.scraped && (
-                  <span className="ml-2 normal-case font-normal text-blue-400/70">· analyse présence en ligne</span>
-                )}
-              </p>
-              <button
-                onClick={() => navigator.clipboard.writeText(`Objet : ${draft.subject}\n\n${draft.body}`)}
-                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              >
-                Copier
-              </button>
-            </div>
-
-            {draft.insights && draft.insights.length > 0 && (
-              <div className="bg-muted/30 rounded-lg px-3 py-2 flex flex-col gap-1">
-                <p className="text-[11px] text-muted-foreground/60 uppercase tracking-wide">Observations</p>
-                {draft.insights.map((insight, i) => (
-                  <p key={i} className="text-xs text-muted-foreground flex gap-1.5">
-                    <span className="text-blue-400 shrink-0">·</span>{insight}
-                  </p>
+            <Section title="Besoins">
+              <div className="flex flex-wrap gap-1.5">
+                {prospect.needType.map((tag) => (
+                  <span
+                    key={tag}
+                    className="flex items-center gap-1 text-xs bg-muted/60 border border-border rounded-full px-2.5 py-1"
+                  >
+                    {tag}
+                    <button
+                      onClick={() =>
+                        patchProspect({ needType: prospect.needType.filter((t) => t !== tag) })
+                      }
+                      className="text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <X size={9} />
+                    </button>
+                  </span>
+                ))}
+                {availableTags.map((tag) => (
+                  <button
+                    key={tag}
+                    onClick={() =>
+                      patchProspect({ needType: [...prospect.needType, tag] })
+                    }
+                    className="text-xs text-muted-foreground/40 border border-dashed border-border/60 rounded-full px-2.5 py-1 hover:text-foreground hover:border-border transition-colors"
+                  >
+                    + {tag}
+                  </button>
                 ))}
               </div>
-            )}
+            </Section>
 
-            <div className="border-t border-blue-400/20 pt-3 flex flex-col gap-2">
-              <p className="text-xs font-medium text-foreground/70">Objet : {draft.subject}</p>
-              <pre className="text-sm text-foreground/80 whitespace-pre-wrap font-sans leading-relaxed">{draft.body}</pre>
-            </div>
-          </section>
-        )}
+            <Section
+              title={`Rappels${pendingReminders.length > 0 ? ` · ${pendingReminders.length}` : ""}`}
+            >
+              <div className="space-y-2">
+                {pendingReminders.length === 0 && !showReminderForm && (
+                  <p className="text-xs text-muted-foreground/35">Aucun rappel en attente.</p>
+                )}
 
-        {/* Rappels */}
-        {pendingReminders.length > 0 && (
-          <section className="border border-amber-400/30 rounded-xl p-4 flex flex-col gap-2">
-            <h2 className="text-sm font-semibold flex items-center gap-2">
-              <Bell size={14} className="text-amber-400" />
-              Rappels ({pendingReminders.length})
-            </h2>
-            {pendingReminders.map((r) => (
-              <div key={r.id} className="flex items-center justify-between gap-3 text-sm">
-                <div>
-                  <span className="text-muted-foreground">{r.note}</span>
-                  <span className="ml-2 text-xs text-amber-400">{fmt(r.dueAt)}</span>
-                </div>
-                <button onClick={() => doneReminder(r.id)}
-                  className="p-1 rounded-lg hover:bg-emerald-500/20 text-muted-foreground hover:text-emerald-400 transition-colors">
-                  <Check size={14} />
-                </button>
+                {pendingReminders.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-start gap-2 bg-amber-500/5 border border-amber-400/20 rounded-xl px-3 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-amber-300/90 leading-snug">{r.note}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{fmtDate(r.dueAt)}</p>
+                    </div>
+                    <button
+                      onClick={() => doneReminder(r.id)}
+                      className="p-1 rounded-lg hover:bg-emerald-500/20 text-muted-foreground hover:text-emerald-400 transition-colors shrink-0 mt-0.5"
+                    >
+                      <Check size={12} />
+                    </button>
+                  </div>
+                ))}
+
+                {showReminderForm ? (
+                  <form onSubmit={addReminder} className="flex flex-col gap-2 pt-1">
+                    <input
+                      value={newReminder.note}
+                      onChange={(e) =>
+                        setNewReminder((r) => ({ ...r, note: e.target.value }))
+                      }
+                      placeholder="Note du rappel…"
+                      className="text-xs bg-muted/30 border border-border rounded-lg px-2.5 py-1.5 outline-none focus:border-primary/40 transition-colors placeholder:text-muted-foreground/35"
+                    />
+                    <input
+                      type="date"
+                      value={newReminder.dueAt}
+                      onChange={(e) =>
+                        setNewReminder((r) => ({ ...r, dueAt: e.target.value }))
+                      }
+                      className="text-xs bg-muted/30 border border-border rounded-lg px-2.5 py-1.5 outline-none focus:border-primary/40 transition-colors"
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={
+                          addingReminder ||
+                          !newReminder.note.trim() ||
+                          !newReminder.dueAt
+                        }
+                        className="flex-1 text-xs bg-primary text-primary-foreground px-2.5 py-1.5 rounded-lg hover:bg-primary/90 disabled:opacity-40 transition-colors"
+                      >
+                        {addingReminder ? (
+                          <Loader2 size={11} className="animate-spin mx-auto" />
+                        ) : (
+                          "Ajouter"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowReminderForm(false)}
+                        className="text-xs text-muted-foreground hover:text-foreground px-2.5 py-1.5 rounded-lg hover:bg-muted transition-colors"
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    onClick={() => setShowReminderForm(true)}
+                    className="w-full text-xs text-muted-foreground/40 border border-dashed border-border/60 rounded-xl py-2 hover:text-foreground hover:border-border transition-colors flex items-center justify-center gap-1"
+                  >
+                    <Plus size={10} />
+                    Ajouter un rappel
+                  </button>
+                )}
               </div>
-            ))}
-          </section>
-        )}
+            </Section>
 
-        {/* Notes */}
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-semibold flex items-center gap-2">
-            <StickyNote size={14} className="text-muted-foreground" />
-            Notes ({prospect.notes.length})
-          </h2>
-          <form onSubmit={addNote} className="flex gap-2">
-            <input
-              className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-background"
-              placeholder="Ajouter une note..."
-              value={noteContent}
-              onChange={(e) => setNoteContent(e.target.value)}
-            />
-            <button type="submit" disabled={savingNote || !noteContent.trim()}
-              className="text-sm bg-primary text-primary-foreground px-3 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50">
-              {savingNote ? <Loader2 size={14} className="animate-spin" /> : "Ajouter"}
-            </button>
-          </form>
-          <div className="flex flex-col gap-2">
-            {prospect.notes.map((note) => (
-              <div key={note.id} className="rounded-lg bg-muted/50 px-3 py-2 text-sm">
-                <p>{note.content}</p>
-                <p className="text-xs text-muted-foreground mt-1">{fmt(note.createdAt)}</p>
-              </div>
-            ))}
-            {prospect.notes.length === 0 && (
-              <p className="text-xs text-muted-foreground/50">Aucune note.</p>
-            )}
-          </div>
-        </section>
+          </aside>
+
+        </div>
       </div>
-    </div>
+    </>
   );
 }

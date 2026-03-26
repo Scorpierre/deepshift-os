@@ -38,11 +38,17 @@ export async function PATCH(request: NextRequest, { params }: Params) {
       ...(body.needType !== undefined && { needType: body.needType }),
       ...(body.estimatedBudget !== undefined && { estimatedBudget: body.estimatedBudget }),
       ...(body.source !== undefined && { source: body.source }),
-      ...(body.lastContactedAt !== undefined && { lastContactedAt: new Date(body.lastContactedAt) }),
-      ...(body.nextActionAt !== undefined && { nextActionAt: new Date(body.nextActionAt) }),
+      ...(body.lastContactedAt !== undefined && { lastContactedAt: body.lastContactedAt ? new Date(body.lastContactedAt) : null }),
+      ...(body.nextActionAt !== undefined && { nextActionAt: body.nextActionAt ? new Date(body.nextActionAt) : null }),
       ...(body.nextActionNote !== undefined && { nextActionNote: body.nextActionNote }),
+      ...(body.companyDescription !== undefined && { companyDescription: body.companyDescription }),
       ...(body.aiSummary !== undefined && { aiSummary: body.aiSummary }),
       ...(body.aiScoreReason !== undefined && { aiScoreReason: body.aiScoreReason }),
+    },
+    include: {
+      emails: { orderBy: { sentAt: "desc" } },
+      notes: { orderBy: { createdAt: "desc" } },
+      reminders: { orderBy: { dueAt: "asc" } },
     },
   });
 
