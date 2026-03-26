@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
 
   const prospects = await prisma.prospect.findMany({
     where: {
-      ...(status ? { status } : {}),
+      ...(status ? { status: status as ProspectStatus } : {}),
       ...(minScore ? { score: { gte: parseInt(minScore) } } : {}),
     },
     include: {
