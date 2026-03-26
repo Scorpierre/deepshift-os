@@ -1,0 +1,160 @@
+{
+  "name": "CRM — Analyse Prospect",
+  "nodes": [
+    {
+      "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 320],
+      "webhookId": "prospect-analysis",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "prospect-analysis",
+        "responseMode": "onReceived",
+        "options": {}
+      }
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "name": "Scrape Page",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [480, 320],
+      "continueOnFail": true,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $json.body.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            },
+            {
+              "name": "Accept-Language",
+              "value": "fr-FR,fr;q=0.9,en;q=0.8"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 8000,
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "fullResponse": false
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "6ba7b810-9dad-11d1-80b4-00c04fd430c8",
+      "name": "Build Claude Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 320],
+      "parameters": {
+        "jsCode": "const wh = $('Webhook').first().json.body;\nlet html = $input.first().json.data ?? '';\n\n// Extraction du texte brut\nhtml = html.replace(/<script[^>]*>[\\s\\S]*?<\\/script>/gi, '');\nhtml = html.replace(/<style[^>]*>[\\s\\S]*?<\\/style>/gi, '');\nhtml = html.replace(/<[^>]+>/g, ' ');\nhtml = html.replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&');\nhtml = html.replace(/\\s+/g, ' ').trim().slice(0, 5000);\n\nconst isFacebook = (wh.url ?? '').includes('facebook.com') || (wh.url ?? '').includes('fb.com');\nconst pageText = html || '[Page inaccessible ou vide]';\nconst sourceType = isFacebook ? 'Page Facebook uniquement (pas de site web propre)' : 'Site web';\nconst needTypes = (wh.needType ?? []).join(', ') || 'non précisé';\nconst company = wh.company || wh.name || 'inconnue';\n\nconst prompt = [\n  'Tu analyses une entreprise prospect pour DeepShift (Pierre Connes — création de web apps sur mesure et consulting digital).',\n  '',\n  'Entreprise : ' + company,\n  'URL analysée : ' + wh.url,\n  'Type de présence : ' + sourceType,\n  'Besoins pressentis : ' + needTypes,\n  '',\n  'Contenu de leur présence en ligne :',\n  '---',\n  pageText,\n  '---',\n  '',\n  'Analyse et réponds UNIQUEMENT en JSON valide (pas de texte autour) :',\n  '{',\n  '  \"summary\": \"2-3 phrases : secteur activité, taille estimée, maturité digitale actuelle\",',\n  '  \"opportunities\": [\"opportunité concrète 1 pour DeepShift\", \"opportunité 2\"],',\n  '  \"digital_maturity\": \"faible | moyenne | élevée\",',\n  '  \"score\": 7,',\n  '  \"score_reason\": \"raison du score en 1 phrase concise\"',\n  '}'\n].join('\\n');\n\nreturn [{\n  json: {\n    prospectId: wh.prospectId,\n    claudeBody: JSON.stringify({\n      model: 'claude-haiku-4-5-20251001',\n      max_tokens: 600,\n      messages: [{ role: 'user', content: prompt }]\n    })\n  }\n}];"
+      }
+    },
+    {
+      "id": "6ba7b811-9dad-11d1-80b4-00c04fd430c8",
+      "name": "Call Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [960, 320],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "={{ $env.ANTHROPIC_API_KEY }}"
+            },
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.claudeBody }}"
+      }
+    },
+    {
+      "id": "6ba7b812-9dad-11d1-80b4-00c04fd430c8",
+      "name": "Parse Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, 320],
+      "parameters": {
+        "jsCode": "const prev = $('Build Claude Request').first().json;\nconst rawText = $input.first().json.content?.[0]?.text ?? '{}';\n\nlet parsed = {};\ntry {\n  const match = rawText.match(/\\{[\\s\\S]*\\}/);\n  parsed = JSON.parse(match?.[0] ?? '{}');\n} catch (e) {\n  parsed = {};\n}\n\nconst parts = [];\nif (parsed.summary) parts.push(parsed.summary);\nif (parsed.opportunities?.length) {\n  parts.push('Opportunités : ' + parsed.opportunities.join(' · '));\n}\nif (parsed.digital_maturity) {\n  parts.push('Maturité digitale : ' + parsed.digital_maturity);\n}\n\nreturn [{\n  json: {\n    prospectId: prev.prospectId,\n    aiSummary: parts.join('\\n') || 'Analyse non disponible',\n    aiScoreReason: parsed.score_reason ?? null,\n    score: parsed.score ?? null,\n  }\n}];"
+      }
+    },
+    {
+      "id": "6ba7b813-9dad-11d1-80b4-00c04fd430c8",
+      "name": "Update Prospect",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1440, 320],
+      "parameters": {
+        "method": "PATCH",
+        "url": "http://localhost:3000/api/webhooks/n8n",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-n8n-secret",
+              "value": "deepshift-n8n-secret-2026"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "bodyParameters": {
+          "parameters": [
+            { "name": "prospectId", "value": "={{ $json.prospectId }}" },
+            { "name": "aiSummary", "value": "={{ $json.aiSummary }}" },
+            { "name": "aiScoreReason", "value": "={{ $json.aiScoreReason }}" },
+            { "name": "score", "value": "={{ $json.score }}" }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Scrape Page", "type": "main", "index": 0 }]]
+    },
+    "Scrape Page": {
+      "main": [[{ "node": "Build Claude Request", "type": "main", "index": 0 }]]
+    },
+    "Build Claude Request": {
+      "main": [[{ "node": "Call Claude", "type": "main", "index": 0 }]]
+    },
+    "Call Claude": {
+      "main": [[{ "node": "Parse Response", "type": "main", "index": 0 }]]
+    },
+    "Parse Response": {
+      "main": [[{ "node": "Update Prospect", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}

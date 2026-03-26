@@ -74,9 +74,10 @@ web_modules/
 .cache
 .parcel-cache
 
-# Next.js build output
-.next
-out
+# Next.js
+app/web/.next/
+app/web/out/
+app/web/next-env.d.ts
 
 # Nuxt.js build / generate output
 .nuxt
@@ -153,3 +154,6 @@ override.tf.json
 *_override.tf.json
 .terraformrc
 terraform.rc
+
+# Prisma generated client
+app/web/src/generated/
