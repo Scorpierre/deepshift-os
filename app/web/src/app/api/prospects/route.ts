@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
         source: body.source ?? null,
         nextActionNote: body.nextActionNote ?? null,
         nextActionAt: body.nextActionAt ? new Date(body.nextActionAt) : null,
+        companyDescription: body.companyDescription ?? null,
       },
     });
   } catch (err: any) {
