@@ -9,11 +9,10 @@ export async function analyzeProspect(prospectId: string) {
   const url = prospect.websiteUrl ?? prospect.linkedinUrl;
   if (!url) return;
 
-  const pageContent = await scrapeUrl(url);
-  if (!pageContent) return;
-
+  const scraped = await scrapeUrl(url);
   const isFacebook = url.includes("facebook.com") || url.includes("fb.com");
   const sourceLabel = isFacebook ? "page Facebook" : "site web";
+  const pageContent = scraped ?? "[Site inaccessible ou protégé — analyse basée sur les informations manuelles uniquement]";
 
   const message = await anthropic.messages.create({
     model: "claude-haiku-4-5-20251001",

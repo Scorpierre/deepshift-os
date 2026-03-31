@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { triggerN8nAnalysis } from "@/lib/n8n";
 import { ProspectStatus } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
-import { analyzeProspect } from "@/lib/analyze-prospect";
+import { triggerN8nAnalysis } from "@/lib/n8n";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -133,11 +132,6 @@ Réponds UNIQUEMENT en JSON :
     });
 
     if (updated.websiteUrl || updated.linkedinUrl) {
-      // Analyse directe : scrape + Claude génère la note commerciale (aiSummary)
-      analyzeProspect(updated.id).catch((err) => {
-        console.error("[scoreProspectAsync] analyzeProspect error:", err);
-      });
-      // Trigger n8n pour les autres automatisations (email, etc.)
       triggerN8nAnalysis(updated);
     }
   } catch (err) {
