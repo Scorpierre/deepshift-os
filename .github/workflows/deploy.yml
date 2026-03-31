@@ -11,6 +11,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Write .env.production on VM
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cat > /opt/deepshift/repo/app/web/.env.production << 'ENVEOF'
+            ${{ secrets.ENV_PRODUCTION }}
+            ENVEOF
+
       - name: SSH & deploy
         uses: appleboy/ssh-action@v1
         with:
