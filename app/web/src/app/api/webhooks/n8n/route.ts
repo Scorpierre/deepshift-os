@@ -24,12 +24,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "score must be 0-10" }, { status: 400 });
   }
 
+  let newStatus: "VIP" | "SCORED" | "ARCHIVED" | undefined;
+  if (parsedScore !== undefined) {
+    if (parsedScore >= 8) newStatus = "VIP";
+    else if (parsedScore >= 4) newStatus = "SCORED";
+    else newStatus = "ARCHIVED";
+  }
+
   const updated = await prisma.prospect.update({
     where: { id: prospectId },
     data: {
       aiSummary,
       ...(aiScoreReason && { aiScoreReason }),
       ...(parsedScore !== undefined && { score: parsedScore }),
+      ...(newStatus && { status: newStatus }),
     },
   });
 
