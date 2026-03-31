@@ -22,7 +22,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
 
 const VALID_STATUSES = [
   "NEW", "SCORING", "SCORED", "VIP",
-  "CONTACTED", "QUALIFIED", "PROPOSAL", "NEGOTIATION", "WON", "LOST", "ARCHIVED",
+  "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON", "LOST", "ARCHIVED",
 ] as const;
 type ProspectStatus = (typeof VALID_STATUSES)[number];
 
@@ -62,7 +62,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         ...(body.status !== undefined && { status: body.status as ProspectStatus }),
         ...(body.score !== undefined && { score: body.score as number }),
         ...(body.needType !== undefined && { needType: body.needType as string[] }),
-        ...(body.estimatedBudget !== undefined && { estimatedBudget: body.estimatedBudget as string }),
+        ...(body.estimatedBudget !== undefined && { estimatedBudget: body.estimatedBudget as number }),
         ...(body.source !== undefined && { source: body.source as string }),
         ...(body.lastContactedAt !== undefined && { lastContactedAt: body.lastContactedAt ? new Date(body.lastContactedAt as string) : null }),
         ...(body.nextActionAt !== undefined && { nextActionAt: body.nextActionAt ? new Date(body.nextActionAt as string) : null }),
