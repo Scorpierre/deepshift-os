@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
-import { scrapeUrl } from "@/lib/scrape";
 
 export async function POST(request: NextRequest) {
   const { prospectId, context } = await request.json();
@@ -9,26 +8,27 @@ export async function POST(request: NextRequest) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
   if (!prospect) return NextResponse.json({ error: "Prospect not found" }, { status: 404 });
 
-  // Utilise les URLs enregistrées dans le profil (site prioritaire, sinon LinkedIn)
+  // Réutilise l'analyse déjà effectuée à la création du prospect (évite un double scraping + appel Claude)
   const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
-  let pageContent: string | null = null;
-  let isFacebook = false;
-  if (url) {
-    pageContent = await scrapeUrl(url);
-    isFacebook = url.includes("facebook.com") || url.includes("fb.com");
-  }
+  const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
+  const hasOnlinePresence = !!url;
 
-  const companyContext = pageContent
-    ? `Contenu de leur présence en ligne (${isFacebook ? "page Facebook" : "site web"}) :
+  const companyContext = prospect.aiSummary
+    ? `Analyse commerciale du prospect (déjà effectuée) :
 ---
-${pageContent}
+${prospect.aiSummary}
+---`
+    : prospect.companyDescription
+    ? `Description de l'entreprise :
+---
+${prospect.companyDescription}
 ---`
     : "";
 
   const opportunityHint = isFacebook
     ? `IMPORTANT : ils n'ont qu'une page Facebook — c'est une opportunité claire pour proposer un vrai site web professionnel. Mentionne concrètement les limites d'une page FB (référencement nul, pas de propriété, dépendance à Meta) et la valeur d'un site sur mesure.`
-    : pageContent
-    ? `Analyse leur site et identifie 1-2 points d'amélioration concrets ou opportunités (design daté, pas de SEO visible, site non responsive, pas de tunnel de conversion, etc.) et mentionne-les naturellement dans l'email.`
+    : hasOnlinePresence && companyContext
+    ? `Appuie-toi sur l'analyse commerciale pour identifier 1-2 points d'amélioration concrets ou opportunités et les mentionner naturellement dans l'email.`
     : "";
 
   const message = await anthropic.messages.create({
@@ -80,5 +80,5 @@ Réponds UNIQUEMENT en JSON valide :
     // fallback
   }
 
-  return NextResponse.json({ ...parsed, scraped: !!pageContent });
+  return NextResponse.json({ ...parsed, scraped: !!prospect.aiSummary });
 }
