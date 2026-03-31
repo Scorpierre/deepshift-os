@@ -4,18 +4,22 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Bell, Check, ChevronDown, Euro, ExternalLink,
-  FileText, Globe, Loader2, Mail, Pencil, Plus, Send,
+  Globe, Loader2, Mail, Pencil, Plus, Send,
   Sparkles, Tag, Trash2, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ProspectStatus =
-  | "NEW" | "CONTACTED" | "QUALIFIED" | "PROPOSAL_SENT"
+  | "NEW" | "SCORING" | "SCORED" | "VIP"
+  | "CONTACTED" | "QUALIFIED" | "PROPOSAL_SENT"
   | "NEGOTIATION" | "WON" | "LOST" | "ARCHIVED";
 
 const STATUS_LABELS: Record<ProspectStatus, string> = {
   NEW: "Nouveau",
+  SCORING: "Scoring…",
+  SCORED: "Scoré",
+  VIP: "VIP",
   CONTACTED: "Contacté",
   QUALIFIED: "Qualifié",
   PROPOSAL_SENT: "Devis envoyé",
@@ -27,8 +31,11 @@ const STATUS_LABELS: Record<ProspectStatus, string> = {
 
 const STATUS_COLORS: Record<ProspectStatus, string> = {
   NEW: "bg-slate-500/20 text-slate-300 border-slate-500/30",
+  SCORING: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+  SCORED: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+  VIP: "bg-violet-500/20 text-violet-300 border-violet-500/30",
   CONTACTED: "bg-blue-500/20 text-blue-300 border-blue-500/30",
-  QUALIFIED: "bg-violet-500/20 text-violet-300 border-violet-500/30",
+  QUALIFIED: "bg-teal-500/20 text-teal-300 border-teal-500/30",
   PROPOSAL_SENT: "bg-amber-500/20 text-amber-300 border-amber-500/30",
   NEGOTIATION: "bg-orange-500/20 text-orange-300 border-orange-500/30",
   WON: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
@@ -47,13 +54,6 @@ type EmailEntry = {
   body: string;
   aiAnalysis: string | null;
   aiIntent: string | null;
-};
-
-type NoteEntry = {
-  id: string;
-  createdAt: string;
-  content: string;
-  source: string | null;
 };
 
 type Reminder = {
@@ -83,8 +83,9 @@ type Prospect = {
   companyDescription: string | null;
   aiSummary: string | null;
   aiScoreReason: string | null;
+  aiTags: string[];
+  aiRecommendedAction: string | null;
   emails: EmailEntry[];
-  notes: NoteEntry[];
   reminders: Reminder[];
 };
 
@@ -118,12 +119,7 @@ function fmtDatetime(d: string | null) {
 }
 
 function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
+  return name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 }
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -341,8 +337,7 @@ function AutoTextarea({
 // ─── Timeline entry ───────────────────────────────────────────────────────────
 
 type TimelineItem =
-  | { kind: "email"; id: string; date: string; direction: "SENT" | "RECEIVED"; subject: string; body: string; aiAnalysis: string | null }
-  | { kind: "note"; id: string; date: string; content: string; source: string | null };
+  | { kind: "email"; id: string; date: string; direction: "SENT" | "RECEIVED"; subject: string; body: string; aiAnalysis: string | null };
 
 function TimelineEntry({ item }: { item: TimelineItem }) {
   const [expanded, setExpanded] = useState(false);
@@ -389,25 +384,24 @@ function TimelineEntry({ item }: { item: TimelineItem }) {
     );
   }
 
-  return (
-    <div className="relative pl-8">
-      <div className="absolute left-0 top-1 size-6 rounded-full bg-muted border border-border flex items-center justify-center shrink-0">
-        <FileText size={11} className="text-muted-foreground" />
-      </div>
-      <div className="bg-muted/30 border border-border/50 rounded-xl px-3 py-2.5">
-        <p className="text-sm leading-relaxed">{item.content}</p>
-        <p className="text-xs text-muted-foreground mt-1">{fmtDatetime(item.date)}</p>
-      </div>
-    </div>
-  );
 }
 
 // ─── Email Modal ──────────────────────────────────────────────────────────────
 
-function EmailModal({ prospectId, onClose }: { prospectId: string; onClose: () => void }) {
+function EmailModal({
+  prospectId,
+  onClose,
+  onSent,
+}: {
+  prospectId: string;
+  onClose: () => void;
+  onSent: () => void;
+}) {
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState<EmailDraft | null>(null);
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
 
   useEffect(() => {
     fetch("/api/ai/draft-email", {
@@ -427,6 +421,29 @@ function EmailModal({ prospectId, onClose }: { prospectId: string; onClose: () =
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function send() {
+    if (!draft) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/prospects/${prospectId}/emails/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subject: draft.subject, body: draft.body }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(`Erreur lors de l'envoi : ${(err as { error?: string }).error ?? res.statusText}`);
+        return;
+      }
+      await res.json();
+      setSent(true);
+      onSent();
+      setTimeout(onClose, 1200);
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[82vh] flex flex-col animate-in zoom-in-95 duration-200">
@@ -437,17 +454,32 @@ function EmailModal({ prospectId, onClose }: { prospectId: string; onClose: () =
             Email rédigé par Claude
           </h2>
           <div className="flex items-center gap-2">
-            {draft && (
-              <button
-                onClick={copy}
-                className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-                  copied
-                    ? "bg-emerald-500/20 text-emerald-400"
-                    : "bg-muted text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                {copied ? "Copié !" : "Copier"}
-              </button>
+            {draft && !sent && (
+              <>
+                <button
+                  onClick={copy}
+                  className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
+                    copied
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : "bg-muted text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {copied ? "Copié !" : "Copier"}
+                </button>
+                <button
+                  onClick={send}
+                  disabled={sending}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                >
+                  {sending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                  {sending ? "Envoi…" : "Envoyer"}
+                </button>
+              </>
+            )}
+            {sent && (
+              <span className="text-xs text-emerald-400 flex items-center gap-1.5">
+                <Check size={11} /> Envoyé !
+              </span>
             )}
             <button
               onClick={onClose}
@@ -522,18 +554,18 @@ export default function ProspectPage() {
   const [emailModalOpen, setEmailModalOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [noteContent, setNoteContent] = useState("");
-  const [savingNote, setSavingNote] = useState(false);
   const [showReminderForm, setShowReminderForm] = useState(false);
   const [newReminder, setNewReminder] = useState({ note: "", dueAt: "" });
   const [addingReminder, setAddingReminder] = useState(false);
 
-  useEffect(() => {
-    fetch(`/api/prospects/${id}`)
-      .then((r) => r.json())
-      .then(setProspect)
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    const data = await fetch(`/api/prospects/${id}`).then((r) => r.json());
+    setProspect(data);
   }, [id]);
+
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+  }, [load]);
 
   const patchProspect = useCallback(
     async (data: Partial<Prospect>) => {
@@ -544,50 +576,32 @@ export default function ProspectPage() {
       });
       const updated = await res.json();
       setProspect((p) => (p ? { ...p, ...updated } : p));
+      await load();
     },
-    [id]
+    [id, load]
   );
 
   async function scoreProspect() {
     setScoring(true);
-    const res = await fetch("/api/ai/score", {
+    await fetch("/api/ai/score", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prospectId: id }),
     });
-    const updated = await res.json();
-    setProspect((p) =>
-      p ? { ...p, score: updated.score, aiScoreReason: updated.aiScoreReason } : p
-    );
+    await load();
     setScoring(false);
-  }
-
-  async function addNote(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!noteContent.trim()) return;
-    setSavingNote(true);
-    const res = await fetch(`/api/prospects/${id}/notes`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: noteContent }),
-    });
-    const note = await res.json();
-    setProspect((p) => (p ? { ...p, notes: [note, ...p.notes] } : p));
-    setNoteContent("");
-    setSavingNote(false);
   }
 
   async function addReminder(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!newReminder.note.trim() || !newReminder.dueAt) return;
     setAddingReminder(true);
-    const res = await fetch("/api/reminders", {
+    await fetch("/api/reminders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prospectId: id, ...newReminder, type: "CUSTOM" }),
     });
-    const reminder = await res.json();
-    setProspect((p) => (p ? { ...p, reminders: [...p.reminders, reminder] } : p));
+    await load();
     setNewReminder({ note: "", dueAt: "" });
     setAddingReminder(false);
     setShowReminderForm(false);
@@ -599,16 +613,7 @@ export default function ProspectPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "DONE" }),
     });
-    setProspect((p) =>
-      p
-        ? {
-            ...p,
-            reminders: p.reminders.map((r) =>
-              r.id === reminderId ? { ...r, status: "DONE" as const } : r
-            ),
-          }
-        : p
-    );
+    await load();
   }
 
   async function deleteProspect() {
@@ -647,13 +652,6 @@ export default function ProspectPage() {
       body: e.body,
       aiAnalysis: e.aiAnalysis,
     })),
-    ...prospect.notes.map((n): TimelineItem => ({
-      kind: "note",
-      id: n.id,
-      date: n.createdAt,
-      content: n.content,
-      source: n.source,
-    })),
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const pendingReminders = prospect.reminders.filter((r) => r.status === "PENDING");
@@ -664,7 +662,11 @@ export default function ProspectPage() {
   return (
     <>
       {emailModalOpen && (
-        <EmailModal prospectId={id} onClose={() => setEmailModalOpen(false)} />
+        <EmailModal
+          prospectId={id}
+          onClose={() => setEmailModalOpen(false)}
+          onSent={() => load()}
+        />
       )}
 
       <div className="flex flex-col h-full overflow-hidden">
@@ -793,12 +795,26 @@ export default function ProspectPage() {
               />
             </Section>
 
-            {(prospect.aiScoreReason || prospect.aiSummary) && (
+            {(prospect.aiScoreReason || prospect.aiSummary || prospect.aiRecommendedAction || prospect.aiTags?.length > 0) && (
               <Section title="Analyse IA">
                 {prospect.aiScoreReason && (
                   <p className="text-xs text-muted-foreground bg-violet-500/8 border border-violet-500/15 rounded-xl px-2.5 py-2 leading-relaxed">
                     {prospect.aiScoreReason}
                   </p>
+                )}
+                {prospect.aiRecommendedAction && (
+                  <p className="text-xs text-emerald-300/80 bg-emerald-500/8 border border-emerald-500/15 rounded-xl px-2.5 py-2 leading-relaxed">
+                    → {prospect.aiRecommendedAction}
+                  </p>
+                )}
+                {prospect.aiTags?.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {prospect.aiTags.map((tag) => (
+                      <span key={tag} className="text-[10px] bg-muted/50 border border-border rounded-full px-2 py-0.5 text-muted-foreground">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 )}
                 {prospect.aiSummary && (
                   <p className="text-xs text-muted-foreground/70 leading-relaxed">
@@ -822,23 +838,6 @@ export default function ProspectPage() {
             </Section>
 
             <Section title={`Timeline · ${timeline.length} événement${timeline.length !== 1 ? "s" : ""}`}>
-              {/* Add note */}
-              <form onSubmit={addNote} className="flex gap-2 mb-3">
-                <input
-                  value={noteContent}
-                  onChange={(e) => setNoteContent(e.target.value)}
-                  placeholder="Ajouter une note…"
-                  className="flex-1 text-sm bg-muted/30 border border-border rounded-xl px-3 py-2 outline-none focus:border-primary/40 transition-colors placeholder:text-muted-foreground/35"
-                />
-                <button
-                  type="submit"
-                  disabled={savingNote || !noteContent.trim()}
-                  className="text-sm bg-primary text-primary-foreground px-3 py-2 rounded-xl hover:bg-primary/90 disabled:opacity-40 transition-colors shrink-0"
-                >
-                  {savingNote ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                </button>
-              </form>
-
               {timeline.length > 0 ? (
                 <div className="space-y-3">
                   {timeline.map((item) => (

@@ -1,44 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
-
-// Extrait le texte lisible d'une page HTML
-function extractText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/\s{2,}/g, " ")
-    .trim()
-    .slice(0, 6000);
-}
-
-async function fetchPageContent(url: string): Promise<string | null> {
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
-      },
-    });
-    clearTimeout(timeout);
-
-    if (!res.ok) return null;
-    const html = await res.text();
-    return extractText(html);
-  } catch {
-    return null;
-  }
-}
+import { scrapeUrl } from "@/lib/scrape";
 
 export async function POST(request: NextRequest) {
   const { prospectId, context } = await request.json();
@@ -51,7 +14,7 @@ export async function POST(request: NextRequest) {
   let pageContent: string | null = null;
   let isFacebook = false;
   if (url) {
-    pageContent = await fetchPageContent(url);
+    pageContent = await scrapeUrl(url);
     isFacebook = url.includes("facebook.com") || url.includes("fb.com");
   }
 
@@ -88,11 +51,13 @@ ${companyContext}
 ${opportunityHint}
 
 Règles pour l'email :
-- Commence par montrer que tu as VRAIMENT regardé leur activité (cite un détail concret)
-- Identifie un problème ou manque précis et propose une solution concrète
-- 3 paragraphes max, ton naturel et direct, pas de jargon commercial
-- Termine par une question ouverte simple pour engager la conversation
-- En français, signature : "Pierre — DeepShift"
+- Ton : professionnel et direct, comme un mail entre deux pros — ni trop formel ni familier
+- Pas de "J'espère que ce message vous trouve en bonne santé", pas de superlatifs, pas de jargon marketing
+- Commence par une observation concrète sur leur activité (1 phrase)
+- Identifie clairement un problème ou une opportunité, propose brièvement ce que tu peux apporter
+- 3 paragraphes max, phrases courtes
+- Termine par une question simple et directe
+- Signature : "Pierre — DeepShift"
 
 Réponds UNIQUEMENT en JSON valide :
 {

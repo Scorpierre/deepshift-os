@@ -1,35 +1,6 @@
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
-
-function extractText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ").replace(/&amp;/g, "&")
-    .replace(/\s{2,}/g, " ")
-    .trim()
-    .slice(0, 6000);
-}
-
-async function scrape(url: string): Promise<string | null> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "fr-FR,fr;q=0.9",
-      },
-    });
-    clearTimeout(t);
-    if (!res.ok) return null;
-    return extractText(await res.text());
-  } catch {
-    return null;
-  }
-}
+import { scrapeUrl } from "@/lib/scrape";
 
 export async function analyzeProspect(prospectId: string) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
@@ -38,31 +9,41 @@ export async function analyzeProspect(prospectId: string) {
   const url = prospect.websiteUrl ?? prospect.linkedinUrl;
   if (!url) return;
 
-  const pageContent = await scrape(url);
+  const pageContent = await scrapeUrl(url);
   if (!pageContent) return;
 
   const isFacebook = url.includes("facebook.com") || url.includes("fb.com");
   const sourceLabel = isFacebook ? "page Facebook" : "site web";
 
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001", // modèle rapide pour l'analyse background
-    max_tokens: 600,
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 800,
     messages: [{
       role: "user",
-      content: `Analyse cette ${sourceLabel} d'une entreprise prospect pour DeepShift (web apps sur mesure, consulting digital).
+      content: `Tu es un expert en développement commercial pour DeepShift (web apps sur mesure, consulting digital pour PME/TPE/indépendants — fondateur : Pierre Connes).
 
-Entreprise : ${prospect.company ?? prospect.name}
+Analyse la ${sourceLabel} de ce prospect et génère une note commerciale synthétique.
+
+Infos renseignées sur le prospect :
+- Entreprise : ${prospect.company ?? prospect.name}
+- Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
+- Budget estimé : ${prospect.estimatedBudget ? `${prospect.estimatedBudget} €` : "inconnu"}
+- Source : ${prospect.source ?? "inconnue"}
+${prospect.companyDescription ? `- Contexte : ${prospect.companyDescription}` : ""}
+${prospect.score ? `- Score potentiel : ${prospect.score}/10` : ""}
+
 Contenu de leur ${sourceLabel} :
 ---
-${pageContent}
+${pageContent.slice(0, 3000)}
 ---
 
-Réponds UNIQUEMENT en JSON :
+Génère une note commerciale. Réponds UNIQUEMENT en JSON :
 {
-  "summary": "résumé de l'entreprise en 2-3 phrases : secteur, taille estimée, maturité digitale",
-  "opportunities": ["opportunité 1 pour DeepShift", "opportunité 2"],
+  "company_summary": "2-3 phrases : secteur d'activité, taille estimée, ce que fait l'entreprise",
+  "commercial_note": "3-4 phrases : potentiel pour DeepShift, besoins digitaux détectés sur le site, points d'accroche spécifiques à mentionner dans l'approche commerciale",
+  "opportunities": ["opportunité concrète 1", "opportunité concrète 2"],
   "digital_maturity": "faible | moyenne | élevée",
-  "has_website": true
+  "detected_sector": "secteur détecté"
 }`,
     }],
   });
@@ -70,22 +51,27 @@ Réponds UNIQUEMENT en JSON :
   const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
   const match = raw.match(/\{[\s\S]*\}/);
   let parsed: {
-    summary?: string;
+    company_summary?: string;
+    commercial_note?: string;
     opportunities?: string[];
     digital_maturity?: string;
-    has_website?: boolean;
+    detected_sector?: string;
   } = {};
   try { parsed = JSON.parse(match?.[0] ?? "{}"); } catch { /* ignore */ }
 
-  if (!parsed.summary) return;
+  if (!parsed.company_summary && !parsed.commercial_note) return;
 
   const summaryText = [
-    parsed.summary,
+    parsed.company_summary,
+    parsed.commercial_note ? `\n${parsed.commercial_note}` : null,
     parsed.opportunities?.length
-      ? `Opportunités : ${parsed.opportunities.join(" · ")}`
+      ? `\nOpportunités : ${parsed.opportunities.join(" · ")}`
       : null,
     parsed.digital_maturity
       ? `Maturité digitale : ${parsed.digital_maturity}`
+      : null,
+    parsed.detected_sector
+      ? `Secteur : ${parsed.detected_sector}`
       : null,
   ].filter(Boolean).join("\n");
 

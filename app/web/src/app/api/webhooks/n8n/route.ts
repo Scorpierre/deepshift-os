@@ -19,12 +19,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "prospectId and aiSummary required" }, { status: 400 });
   }
 
+  const parsedScore = score !== undefined && score !== null ? parseInt(score) : undefined;
+  if (parsedScore !== undefined && (isNaN(parsedScore) || parsedScore < 0 || parsedScore > 10)) {
+    return NextResponse.json({ error: "score must be 0-10" }, { status: 400 });
+  }
+
   const updated = await prisma.prospect.update({
     where: { id: prospectId },
     data: {
       aiSummary,
       ...(aiScoreReason && { aiScoreReason }),
-      ...(score && { score: parseInt(score) }),
+      ...(parsedScore !== undefined && { score: parsedScore }),
     },
   });
 

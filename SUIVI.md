@@ -1,6 +1,6 @@
 # DeepShift — Suivi d'avancement
 
-> Dernière mise à jour : 2026-03-26
+> Dernière mise à jour : 2026-03-30
 
 ---
 
@@ -60,10 +60,17 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 | Layout dashboard | ✅ Fait | Nav latérale + routing |
 | Repo GitHub restructuré | ✅ Fait | `app/web/` Next.js · `app/cloud/` Terraform |
 | Fix TS Prisma 7 — enums | ✅ Fait | `ProspectStatus` et `ReminderType` : imports + casts explicites (TS2322) |
-| Fiche prospect `/crm/[id]` — v2 | ✅ Fait | Layout 3 colonnes, édition inline sur tous les champs, autosave blur, timeline emails+notes, modale email IA, rappels, tags |
+| Fiche prospect `/crm/[id]` — v2 | ✅ Fait | Layout 3 colonnes, édition inline sur tous les champs, autosave blur, timeline emails, modale email IA + envoi Gmail, rappels, tags |
 | Champ `companyDescription` | ✅ Fait | Ajouté au schéma Prisma + migration `20260326000000_add_company_description` |
-| Scoring IA — logique business | ✅ Fait | Prompt réécrit : score 0-10 = potentiel CA pour DeepShift (page FB + gros business → 9/10, Salesforce → 0/10) |
+| Scoring IA — logique business | ✅ Fait | Score 0-10 = probabilité de conclure un contrat, basé sur profil prospect uniquement (sans email) |
 | Fix parsing JSON Claude | ✅ Fait | Claude enveloppait sa réponse en markdown — regex `\{[\s\S]*\}` pour extraire le JSON brut |
+| Scoring IA — tags + action recommandée | ✅ Fait | `aiTags` et `aiRecommendedAction` persistés en base + affichés dans la fiche |
+| Notes manuelles supprimées | ✅ Fait | Remplacées par `companyDescription` (champ libre) — plus cohérent |
+| Kanban — LOST/ARCHIVED masqués | ✅ Fait | Pipeline actif par défaut, toggle "Voir perdus" si des perdus existent |
+| Auto-LOST par email | ✅ Fait | 3 emails SENT + 0 réponse + 10j → statut LOST automatiquement au chargement du Kanban |
+| Séquence relances email | ✅ Fait | `/api/ai/draft-followup` (relance #1 J+3 et #2 J+7) + `/api/cron/check-followups` pour n8n |
+| Gmail OAuth configuré | ✅ Fait | Client ID + Secret + Refresh Token dans `.env.local` — compte `scopierres@gmail.com` |
+| Envoi email depuis la fiche | ✅ Fait | Bouton "Envoyer" dans la modale Claude — envoie via Gmail API + sauvegarde en base + mise à jour timeline |
 
 ---
 
@@ -71,7 +78,7 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Module | Statut | Notes |
 |--------|--------|-------|
-| CRM & Prospection | ✅ Fait | Kanban pipeline, fiche prospect 3 colonnes (inline edit + autosave), scoring IA business-oriented, email personnalisé (scraping site/FB), timeline activité, rappels, description entreprise |
+| CRM & Prospection | ✅ Fait | Kanban pipeline (LOST masqué, auto-LOST), fiche prospect 3 colonnes, scoring IA (score + tags + action), email personnalisé Claude (scraping site/FB) + envoi Gmail, relances auto J+3/J+7 (prêtes pour n8n), timeline emails, rappels |
 | Gestion de Projets | ⬜ À faire | Kanban, suivi temps, jalons |
 | Finance | ⬜ À faire | Devis, factures, relances paiement |
 | Interne / Admin | ⬜ À faire | Abonnements, base de connaissance, weekly review |
@@ -98,8 +105,8 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Service | Statut | Notes |
 |---------|--------|-------|
-| Claude API | ✅ Fait | Connecté dans n8n + clé dans app Next.js (.env.production) |
-| Gmail OAuth | ⬜ À configurer | Envoi/réception emails automatisés |
+| Claude API | ✅ Fait | Connecté dans n8n + clé dans app Next.js (.env.local) |
+| Gmail OAuth | ✅ Fait | OAuth2 Desktop app — refresh token configuré — envoi depuis `scopierres@gmail.com` |
 | Google Calendar API | ⬜ À configurer | Sync agenda |
 | GitHub (webhooks n8n) | ⬜ À configurer | Onboarding client → création repo |
 | Granola | ⬜ Optionnel | Transcription appels (~15€/mois) |
@@ -111,7 +118,8 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 | Workflow | Statut | Notes |
 |----------|--------|-------|
 | Analyse prospect → scraping → scoring Claude → CRM | ✅ Fait | Webhook `/webhook/prospect-analysis` — déclenché à la création d'un prospect avec URL |
-| Analyse réponses emails → scoring → statut prospect | ⬜ À faire | — |
+| Relances auto J+3/J+7 → email Claude → envoi Gmail | ⬜ À faire | Endpoints prêts (`/api/cron/check-followups` + `/api/ai/draft-followup`) — workflow n8n à créer |
+| Analyse réponses emails → scoring → statut prospect | ⬜ À faire | Nécessite sync Gmail entrant |
 | Génération devis → envoi → relance | ⬜ À faire | — |
 | Onboarding client → projet → repo GitHub → email bienvenue | ⬜ À faire | — |
 | Facturation livraison → relances paiement | ⬜ À faire | — |
@@ -129,6 +137,6 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 | UI | shadcn/ui + Tailwind | ✅ (initialisé) |
 | IA | Claude API | ✅ (n8n + Next.js) |
 | Automatisation | n8n self-hosted | ✅ (Docker — http://20.111.38.245:5678) |
-| Email | Gmail API | ⬜ |
+| Email | Gmail API | ✅ (OAuth2 configuré — envoi opérationnel) |
 | Calendrier | Google Calendar API | ⬜ |
 | Hébergement | Azure VM `deepshift-vm` — FranceCentral | ✅ (`20.111.38.245`) |

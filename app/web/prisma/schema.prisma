@@ -7,6 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ─── CRM ───────────────────────────────────────────────────────────────────
@@ -26,7 +27,7 @@ model Prospect {
 
   // Pipeline
   status ProspectStatus @default(NEW)
-  score  Int? // 1-10 par Claude
+  score  Int? // 1-10 par Claude (1 = faible, 10 = excellent)
 
   // Contexte
   needType        String[] // ["webapp", "site", "consulting", "api"]
@@ -42,17 +43,25 @@ model Prospect {
   companyDescription String? @db.Text // notes libres sur l'entreprise
 
   // IA
-  aiSummary     String? // résumé Claude du prospect
-  aiScoreReason String? // pourquoi ce score
+  aiSummary           String? // résumé Claude du prospect
+  aiScoreReason       String? // pourquoi ce score
+  aiTags              String[] // tags générés par le scoring
+  aiRecommendedAction String? // action recommandée par le scoring
 
   // Relations
   emails    Email[]
   notes     Note[]
   reminders Reminder[]
+
+  @@index([status])
+  @@index([updatedAt])
 }
 
 enum ProspectStatus {
   NEW
+  SCORING
+  SCORED
+  VIP
   CONTACTED
   QUALIFIED
   PROPOSAL_SENT
@@ -78,6 +87,10 @@ model Email {
   // Analyse IA
   aiAnalysis String? // résumé Claude de l'email reçu
   aiIntent   String? // INTERESTED / NOT_INTERESTED / NEEDS_INFO / CALLBACK
+
+  @@index([prospectId])
+  @@index([prospectId, direction])
+  @@index([sentAt])
 }
 
 enum EmailDirection {
@@ -107,6 +120,9 @@ model Reminder {
   note   String
   status ReminderStatus @default(PENDING)
   type   ReminderType
+
+  @@index([prospectId])
+  @@index([status, dueAt])
 }
 
 enum ReminderStatus {
