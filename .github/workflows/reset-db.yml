@@ -1,0 +1,21 @@
+name: Reset DB (prod)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  reset:
+    name: Truncate all tables
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH & truncate
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            PGPASSWORD='DeepShift2026!' psql -h 10.0.1.4 -U deepshift -d deepshift_db -c '
+              TRUNCATE "Prospect" CASCADE;
+            '
+            echo "✅ DB cleared at $(date)"
