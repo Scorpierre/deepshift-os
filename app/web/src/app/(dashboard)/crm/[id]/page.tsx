@@ -769,13 +769,6 @@ export default function ProspectPage() {
                 options={SOURCES.map((s) => ({ value: s, label: s }))}
                 onSave={(v) => patchProspect({ source: v })}
               />
-              <InlineField
-                label="Score IA"
-                value={prospect.score !== null ? String(prospect.score) : null}
-                type="number"
-                placeholder="1 – 10"
-                onSave={(v) => patchProspect({ score: v ? parseInt(v, 10) : null })}
-              />
             </Section>
 
             <Section title="Liens">
@@ -795,38 +788,9 @@ export default function ProspectPage() {
               />
             </Section>
 
-            {(prospect.aiScoreReason || prospect.aiSummary || prospect.aiRecommendedAction || prospect.aiTags?.length > 0) && (
-              <Section title="Analyse IA">
-                {prospect.aiScoreReason && (
-                  <p className="text-xs text-muted-foreground bg-violet-500/8 border border-violet-500/15 rounded-xl px-2.5 py-2 leading-relaxed">
-                    {prospect.aiScoreReason}
-                  </p>
-                )}
-                {prospect.aiRecommendedAction && (
-                  <p className="text-xs text-emerald-300/80 bg-emerald-500/8 border border-emerald-500/15 rounded-xl px-2.5 py-2 leading-relaxed">
-                    → {prospect.aiRecommendedAction}
-                  </p>
-                )}
-                {prospect.aiTags?.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {prospect.aiTags.map((tag) => (
-                      <span key={tag} className="text-[10px] bg-muted/50 border border-border rounded-full px-2 py-0.5 text-muted-foreground">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {prospect.aiSummary && (
-                  <p className="text-xs text-muted-foreground/70 leading-relaxed">
-                    {prospect.aiSummary}
-                  </p>
-                )}
-              </Section>
-            )}
-
           </aside>
 
-          {/* ── CENTER : description + timeline ──────────────────────────── */}
+          {/* ── CENTER : description + analyse IA + timeline ─────────────── */}
           <main className="overflow-y-auto p-4 space-y-6">
 
             <Section title="Description entreprise">
@@ -836,6 +800,37 @@ export default function ProspectPage() {
                 onSave={(v) => patchProspect({ companyDescription: v })}
               />
             </Section>
+
+            {(prospect.aiSummary || prospect.aiScoreReason || prospect.aiRecommendedAction || prospect.aiTags?.length > 0) && (
+              <Section title="Analyse IA">
+                <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-3 space-y-3">
+                  {prospect.aiSummary && (
+                    <p className="text-sm text-foreground/85 leading-relaxed whitespace-pre-line">
+                      {prospect.aiSummary}
+                    </p>
+                  )}
+                  {prospect.aiScoreReason && (
+                    <p className="text-xs text-muted-foreground border-t border-violet-500/15 pt-2.5 leading-relaxed">
+                      {prospect.aiScoreReason}
+                    </p>
+                  )}
+                  {prospect.aiRecommendedAction && (
+                    <p className="text-xs text-emerald-300/90 bg-emerald-500/8 border border-emerald-500/15 rounded-lg px-2.5 py-2 leading-relaxed">
+                      → {prospect.aiRecommendedAction}
+                    </p>
+                  )}
+                  {prospect.aiTags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {prospect.aiTags.map((tag) => (
+                        <span key={tag} className="text-[10px] bg-muted/50 border border-border rounded-full px-2 py-0.5 text-muted-foreground">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </Section>
+            )}
 
             <Section title={`Timeline · ${timeline.length} événement${timeline.length !== 1 ? "s" : ""}`}>
               {timeline.length > 0 ? (
