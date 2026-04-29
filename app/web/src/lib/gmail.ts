@@ -59,6 +59,66 @@ function buildRawEmail({
   return toBase64Url(mime);
 }
 
+/** Extrait l'adresse email depuis un header "From" ("Nom Prénom <email@domain.com>") */
+export function extractEmailAddress(from: string): string {
+  const match = from.match(/<([^>]+)>/);
+  return (match ? match[1] : from).trim().toLowerCase();
+}
+
+/** Extrait le texte brut d'un payload Gmail (MIME) */
+function extractBody(payload: Record<string, unknown>): string {
+  if (!payload) return "";
+  const body = payload.body as { data?: string } | undefined;
+  if (payload.mimeType === "text/plain" && body?.data) {
+    return Buffer.from(body.data, "base64").toString("utf-8");
+  }
+  const parts = payload.parts as Record<string, unknown>[] | undefined;
+  if (parts) {
+    for (const part of parts) {
+      const partBody = part.body as { data?: string } | undefined;
+      if (part.mimeType === "text/plain" && partBody?.data) {
+        return Buffer.from(partBody.data, "base64").toString("utf-8");
+      }
+    }
+    for (const part of parts) {
+      const text = extractBody(part);
+      if (text) return text;
+    }
+  }
+  return "";
+}
+
+/** Retourne les gmailIds des messages non lus dans la boîte de réception */
+export async function listUnreadEmailIds(): Promise<string[]> {
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread+in:inbox&maxResults=50",
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+  return (data.messages ?? []).map((m: { id: string }) => m.id);
+}
+
+/** Récupère le contenu complet d'un message Gmail */
+export async function getEmailMessage(gmailId: string): Promise<{
+  gmailId: string;
+  from: string;
+  subject: string;
+  body: string;
+}> {
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${gmailId}?format=full`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+  const headers = (data.payload?.headers ?? []) as { name: string; value: string }[];
+  const from = headers.find((h) => h.name === "From")?.value ?? "";
+  const subject = headers.find((h) => h.name === "Subject")?.value ?? "";
+  const body = extractBody(data.payload ?? {});
+  return { gmailId, from, subject, body };
+}
+
 export async function sendEmail({
   to,
   subject,
