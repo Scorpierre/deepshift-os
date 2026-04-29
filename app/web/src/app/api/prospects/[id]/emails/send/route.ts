@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   });
 
   // Met à jour la date de dernier contact et passe en CONTACTED si le prospect est encore en NEW
-  const statusesToUpgrade = ["NEW", "LOST", "ARCHIVED"];
+  const statusesToUpgrade = ["NEW", "SCORING", "SCORED", "VIP", "LOST", "ARCHIVED"];
   await prisma.prospect.update({
     where: { id },
     data: {
