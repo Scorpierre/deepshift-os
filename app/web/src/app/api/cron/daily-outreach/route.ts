@@ -13,43 +13,44 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Prend le plus ancien prospect SCORED sans email envoyé
-  const prospect = await prisma.prospect.findFirst({
+  // Prend tous les prospects SCORED sans email envoyé
+  const prospects = await prisma.prospect.findMany({
     where: {
       status: "SCORED",
       emails: { none: { direction: "SENT" } },
     },
     orderBy: { createdAt: "asc" },
-    include: { emails: true },
   });
 
-  if (!prospect) {
-    return NextResponse.json({ sent: false, reason: "Aucun prospect SCORED en attente" });
+  if (prospects.length === 0) {
+    return NextResponse.json({ sent: 0, reason: "Aucun prospect SCORED en attente" });
   }
 
-  // Génère l'email avec Claude (réutilise aiSummary déjà en base)
-  const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
-  const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
-  const hasOnlinePresence = !!url;
+  const results: { name: string; sent: boolean; reason?: string }[] = [];
 
-  const companyContext = prospect.aiSummary
-    ? `Analyse commerciale du prospect (déjà effectuée) :\n---\n${prospect.aiSummary}\n---`
-    : prospect.companyDescription
-    ? `Description de l'entreprise :\n---\n${prospect.companyDescription}\n---`
-    : "";
+  for (const prospect of prospects) {
+    const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
+    const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
+    const hasOnlinePresence = !!url;
 
-  const opportunityHint = isFacebook
-    ? `IMPORTANT : ils n'ont qu'une page Facebook — opportunité claire pour proposer un vrai site web. Mentionne les limites d'une page FB et la valeur d'un site sur mesure.`
-    : hasOnlinePresence && companyContext
-    ? `Appuie-toi sur l'analyse commerciale pour identifier 1-2 points d'amélioration concrets à mentionner naturellement.`
-    : "";
+    const companyContext = prospect.aiSummary
+      ? `Analyse commerciale du prospect (déjà effectuée) :\n---\n${prospect.aiSummary}\n---`
+      : prospect.companyDescription
+      ? `Description de l'entreprise :\n---\n${prospect.companyDescription}\n---`
+      : "";
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
-    max_tokens: 1500,
-    messages: [{
-      role: "user",
-      content: `Tu es Pierre Connes, auto-entrepreneur IT (DeepShift) spécialisé en web apps sur mesure et consulting digital. Rédige un email de prospection hyper-personnalisé.
+    const opportunityHint = isFacebook
+      ? `IMPORTANT : ils n'ont qu'une page Facebook — opportunité claire pour proposer un vrai site web. Mentionne les limites d'une page FB et la valeur d'un site sur mesure.`
+      : hasOnlinePresence && companyContext
+      ? `Appuie-toi sur l'analyse commerciale pour identifier 1-2 points d'amélioration concrets à mentionner naturellement.`
+      : "";
+
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 1500,
+      messages: [{
+        role: "user",
+        content: `Tu es Pierre Connes, auto-entrepreneur IT (DeepShift) spécialisé en web apps sur mesure et consulting digital. Rédige un email de prospection hyper-personnalisé.
 
 Prospect :
 - Nom : ${prospect.name}
@@ -75,39 +76,40 @@ Réponds UNIQUEMENT en JSON valide :
   "subject": "Objet court et accrocheur",
   "body": "Corps de l'email complet"
 }`,
-    }],
-  });
+      }],
+    });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  let parsed: { subject?: string; body?: string } = {};
-  try { parsed = JSON.parse(jsonMatch?.[0] ?? "{}"); } catch { /* fallback */ }
+    const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    let parsed: { subject?: string; body?: string } = {};
+    try { parsed = JSON.parse(jsonMatch?.[0] ?? "{}"); } catch { /* fallback */ }
 
-  if (!parsed.subject || !parsed.body) {
-    return NextResponse.json({ sent: false, reason: "Échec génération email Claude" }, { status: 500 });
+    if (!parsed.subject || !parsed.body) {
+      results.push({ name: prospect.name, sent: false, reason: "Échec génération Claude" });
+      continue;
+    }
+
+    const { gmailId } = await sendEmail({ to: prospect.email, subject: parsed.subject, body: parsed.body });
+    await applyLabel(gmailId, "deepshift-prospect");
+
+    await prisma.email.create({
+      data: {
+        prospectId: prospect.id,
+        direction: "SENT",
+        subject: parsed.subject,
+        body: parsed.body,
+        sentAt: new Date(),
+        gmailId,
+      },
+    });
+
+    await prisma.prospect.update({
+      where: { id: prospect.id },
+      data: { status: "CONTACTED", lastContactedAt: new Date() },
+    });
+
+    results.push({ name: prospect.name, sent: true });
   }
 
-  // Envoie l'email
-  const { gmailId } = await sendEmail({ to: prospect.email, subject: parsed.subject, body: parsed.body });
-  await applyLabel(gmailId, "deepshift-prospect");
-
-  // Sauvegarde en base
-  await prisma.email.create({
-    data: {
-      prospectId: prospect.id,
-      direction: "SENT",
-      subject: parsed.subject,
-      body: parsed.body,
-      sentAt: new Date(),
-      gmailId,
-    },
-  });
-
-  // Passe en CONTACTED
-  await prisma.prospect.update({
-    where: { id: prospect.id },
-    data: { status: "CONTACTED", lastContactedAt: new Date() },
-  });
-
-  return NextResponse.json({ sent: true, prospectId: prospect.id, name: prospect.name });
+  return NextResponse.json({ sent: results.filter(r => r.sent).length, total: prospects.length, results });
 }
