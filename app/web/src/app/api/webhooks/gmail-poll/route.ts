@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
 
     // Cherche le prospect correspondant à l'adresse expéditrice
     const prospect = await prisma.prospect.findFirst({
-      where: { email: senderEmail },
+      where: { email: { equals: senderEmail, mode: "insensitive" } },
     });
 
     if (!prospect) {
