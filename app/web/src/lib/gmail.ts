@@ -88,11 +88,33 @@ function extractBody(payload: Record<string, unknown>): string {
   return "";
 }
 
-/** Retourne les gmailIds des messages non lus dans la boîte de réception */
+/** Retourne l'ID du label Gmail par son nom, null si introuvable */
+async function getLabelId(name: string, accessToken: string): Promise<string | null> {
+  const res = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/labels", {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await res.json();
+  const label = (data.labels ?? []).find((l: { name: string }) => l.name === name);
+  return label?.id ?? null;
+}
+
+/** Applique un label Gmail à un message */
+export async function applyLabel(gmailId: string, labelName: string): Promise<void> {
+  const accessToken = await getAccessToken();
+  const labelId = await getLabelId(labelName, accessToken);
+  if (!labelId) return;
+  await fetch(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${gmailId}/modify`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ addLabelIds: [labelId] }),
+  });
+}
+
+/** Retourne les gmailIds des messages non lus avec le label deepshift-prospect */
 export async function listUnreadEmailIds(): Promise<string[]> {
   const accessToken = await getAccessToken();
   const res = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread+in:inbox&maxResults=50",
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread+label:deepshift-prospect&maxResults=50",
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const data = await res.json();

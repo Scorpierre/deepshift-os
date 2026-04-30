@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendEmail } from "@/lib/gmail";
+import { sendEmail, applyLabel } from "@/lib/gmail";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -11,8 +11,9 @@ export async function POST(request: NextRequest, { params }: Params) {
   const prospect = await prisma.prospect.findUnique({ where: { id } });
   if (!prospect) return NextResponse.json({ error: "Prospect not found" }, { status: 404 });
 
-  // Envoi Gmail
+  // Envoi Gmail + label pour que les réponses soient trackées par gmail-poll
   const { gmailId } = await sendEmail({ to: prospect.email, subject, body });
+  await applyLabel(gmailId, "deepshift-prospect");
 
   // Sauvegarde en base
   const email = await prisma.email.create({
