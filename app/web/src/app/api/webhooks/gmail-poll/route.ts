@@ -11,6 +11,19 @@ type Intent =
   | "LATER"
   | "UNCLEAR";
 
+const INTENT_CONFIG: Record<Intent, {
+  status?: string;
+  tag: string;
+  action?: string;
+}> = {
+  INTERESTED:         { status: "QUALIFIED",     tag: "intéressé",     action: "Relancer rapidement — intérêt confirmé" },
+  NEEDS_INFO:         { status: "QUALIFIED",     tag: "besoin d'infos", action: "Répondre à ses questions" },
+  UNCLEAR:            { status: "QUALIFIED",     tag: "à clarifier",   action: "Appeler pour clarifier la réponse" },
+  PROPOSAL_REQUESTED: { status: "PROPOSAL_SENT", tag: "devis demandé", action: "Envoyer le devis" },
+  LATER:              { status: "ARCHIVED",      tag: "plus tard" },
+  NOT_INTERESTED:     { status: "ARCHIVED",      tag: "pas intéressé" },
+};
+
 // Statuts qu'on ne doit jamais rétrograder
 const STATUS_ORDER = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON"];
 
@@ -76,8 +89,7 @@ Réponds UNIQUEMENT en JSON :
 
 /**
  * Appelé par n8n toutes les 24h.
- * Lit les emails non lus, les associe aux prospects par adresse email,
- * analyse l'intent et met à jour les statuts.
+ * Scan inbox 2 derniers jours, associe aux prospects, analyse l'intent et met à jour les statuts.
  */
 export async function POST(request: NextRequest) {
   const secret = request.headers.get("x-n8n-secret");
@@ -105,7 +117,6 @@ export async function POST(request: NextRequest) {
     const message = await getEmailMessage(gmailId);
     const senderEmail = extractEmailAddress(message.from);
 
-    // Cherche le prospect correspondant à l'adresse expéditrice
     const prospect = await prisma.prospect.findFirst({
       where: { email: { equals: senderEmail, mode: "insensitive" } },
     });
@@ -116,38 +127,27 @@ export async function POST(request: NextRequest) {
     }
 
     const { intent, analysis, laterDate } = await analyzeEmail(message.body, prospect.name);
-
-    // Détermine le nouveau statut
-    const statusMap: Partial<Record<Intent, string>> = {
-      INTERESTED: "QUALIFIED",
-      NOT_INTERESTED: "LOST",
-      NEEDS_INFO: "QUALIFIED",
-      PROPOSAL_REQUESTED: "PROPOSAL_SENT",
-    };
-
-    let newStatus: string | undefined = statusMap[intent];
-
-    // UNCLEAR → ARCHIVED seulement si le prospect n'est pas encore avancé
-    if (intent === "UNCLEAR" && ["NEW", "CONTACTED"].includes(prospect.status)) {
-      newStatus = "ARCHIVED";
-    }
+    const config = INTENT_CONFIG[intent];
 
     // Ne jamais rétrograder un statut déjà avancé
-    if (newStatus && !canTransition(prospect.status, newStatus)) {
-      newStatus = undefined;
-    }
+    const newStatus = config.status && canTransition(prospect.status, config.status)
+      ? config.status
+      : undefined;
 
-    // Mise à jour du prospect
+    // Ajoute le tag à la liste existante (sans doublon)
+    const existingTags: string[] = Array.isArray(prospect.aiTags) ? prospect.aiTags as string[] : [];
+    const updatedTags = Array.from(new Set([...existingTags, config.tag]));
+
     const prospectUpdate: Record<string, unknown> = {
       lastContactedAt: new Date(),
+      aiTags: updatedTags,
       ...(newStatus && { status: newStatus }),
+      ...(config.action && { aiRecommendedAction: config.action }),
+      ...(intent === "LATER" && laterDate && {
+        nextActionAt: new Date(laterDate),
+        nextActionNote: `Relance suite réponse : ${analysis}`,
+      }),
     };
-
-    // LATER : remplit nextActionAt et crée un reminder
-    if (intent === "LATER" && laterDate) {
-      prospectUpdate.nextActionAt = new Date(laterDate);
-      prospectUpdate.nextActionNote = `Relance suite réponse : ${analysis}`;
-    }
 
     await prisma.prospect.update({ where: { id: prospect.id }, data: prospectUpdate });
 
@@ -162,7 +162,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Sauvegarde l'email en base pour ne pas le retraiter
     await prisma.email.create({
       data: {
         prospectId: prospect.id,

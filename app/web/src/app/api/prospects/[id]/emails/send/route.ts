@@ -8,6 +8,15 @@ export async function POST(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const { subject, body } = await request.json();
 
+  // Bloquer l'envoi le lundi (1) et vendredi (5) — jours défavorables en prospection B2B
+  const day = new Date().getDay();
+  if (day === 0 || day === 1 || day === 5 || day === 6) {
+    return NextResponse.json(
+      { error: "Envoi déconseillé ce jour — préfère mardi, mercredi ou jeudi pour maximiser les réponses." },
+      { status: 422 }
+    );
+  }
+
   const prospect = await prisma.prospect.findUnique({ where: { id } });
   if (!prospect) return NextResponse.json({ error: "Prospect not found" }, { status: 404 });
 
