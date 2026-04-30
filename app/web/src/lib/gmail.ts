@@ -110,11 +110,11 @@ export async function applyLabel(gmailId: string, labelName: string): Promise<vo
   });
 }
 
-/** Retourne les gmailIds des messages non lus avec le label deepshift-prospect */
+/** Retourne les gmailIds des messages avec le label deepshift-prospect (lus ou non) */
 export async function listUnreadEmailIds(): Promise<string[]> {
   const accessToken = await getAccessToken();
   const res = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=is:unread+label:deepshift-prospect&maxResults=50",
+    "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=label:deepshift-prospect&maxResults=50",
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const data = await res.json();
