@@ -51,6 +51,8 @@ model Prospect {
   emails    Email[]
   notes     Note[]
   reminders Reminder[]
+  quotes    Quote[]
+  invoices  Invoice[]
 
   @@index([status])
   @@index([updatedAt])
@@ -135,4 +137,87 @@ enum ReminderType {
   CALL
   PROPOSAL
   CUSTOM
+}
+
+// ─── Finance ──────────────────────────────────────────────────────────────────
+
+model Quote {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id])
+
+  number     String      @unique // DEVIS-2026-001
+  title      String
+  lines      Json        // [{description, qty, unitPrice, total}]
+  totalHT    Float
+  validUntil DateTime?
+  sentAt     DateTime?
+  notes      String?     @db.Text
+  status     QuoteStatus @default(DRAFT)
+
+  invoice Invoice?
+
+  @@index([prospectId])
+  @@index([status])
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model Invoice {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id])
+
+  quoteId String? @unique
+  quote   Quote?  @relation(fields: [quoteId], references: [id])
+
+  number   String        @unique // FAC-2026-001
+  title    String
+  lines    Json
+  totalHT  Float
+  issuedAt DateTime      @default(now())
+  dueAt    DateTime
+  paidAt   DateTime?
+  notes    String?       @db.Text
+  status   InvoiceStatus @default(PENDING)
+
+  paymentReminders PaymentReminder[]
+
+  @@index([prospectId])
+  @@index([status])
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+model PaymentReminder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  invoiceId String
+  invoice   Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  sentAt DateTime
+  type   PaymentReminderType
+}
+
+enum PaymentReminderType {
+  DAY_30
+  DAY_45
 }

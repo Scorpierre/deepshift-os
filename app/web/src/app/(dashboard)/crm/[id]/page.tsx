@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Bell, Check, ChevronDown, Euro, ExternalLink,
-  Globe, Loader2, Mail, Pencil, Plus, Send,
+  FileText, Globe, Loader2, Mail, Pencil, Plus, Receipt, Send,
   Sparkles, Tag, Trash2, X,
 } from "lucide-react";
 
@@ -62,6 +62,11 @@ type Reminder = {
   note: string;
   status: "PENDING" | "DONE" | "SNOOZED";
   type: string;
+};
+
+type FinanceSummary = {
+  quotes: { id: string; number: string; totalHT: number; status: string }[];
+  invoices: { id: string; number: string; totalHT: number; status: string }[];
 };
 
 type Prospect = {
@@ -557,10 +562,16 @@ export default function ProspectPage() {
   const [showReminderForm, setShowReminderForm] = useState(false);
   const [newReminder, setNewReminder] = useState({ note: "", dueAt: "" });
   const [addingReminder, setAddingReminder] = useState(false);
+  const [finance, setFinance] = useState<FinanceSummary | null>(null);
 
   const load = useCallback(async () => {
     const data = await fetch(`/api/prospects/${id}`).then((r) => r.json());
     setProspect(data);
+    const [q, inv] = await Promise.all([
+      fetch(`/api/quotes?prospectId=${id}`).then((r) => r.json()),
+      fetch(`/api/invoices?prospectId=${id}`).then((r) => r.json()),
+    ]);
+    setFinance({ quotes: q, invoices: inv });
   }, [id]);
 
   useEffect(() => {
@@ -867,7 +878,47 @@ export default function ProspectPage() {
                 <Mail size={13} />
                 Générer email
               </button>
+              {["QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON"].includes(prospect.status) && (
+                <button
+                  onClick={() => router.push(`/finance`)}
+                  className="w-full flex items-center justify-center gap-2 text-sm bg-emerald-500/12 text-emerald-300 border border-emerald-500/20 px-3 py-2 rounded-xl hover:bg-emerald-500/20 transition-all"
+                >
+                  <FileText size={13} />
+                  Créer un devis
+                </button>
+              )}
             </Section>
+
+            {finance && (finance.quotes.length > 0 || finance.invoices.length > 0) && (
+              <Section title="Finance">
+                <div className="space-y-1.5">
+                  {finance.quotes.map((q) => (
+                    <div key={q.id} className="flex items-center justify-between text-xs bg-muted/30 rounded-lg px-2.5 py-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <FileText size={10} className="text-blue-400 shrink-0" />
+                        <span className="text-muted-foreground font-mono truncate">{q.number}</span>
+                      </div>
+                      <span className="font-medium shrink-0">{q.totalHT.toLocaleString("fr-FR", { minimumFractionDigits: 0 })} €</span>
+                    </div>
+                  ))}
+                  {finance.invoices.map((inv) => (
+                    <div key={inv.id} className={`flex items-center justify-between text-xs rounded-lg px-2.5 py-2 ${inv.status === "PAID" ? "bg-emerald-500/8" : inv.status === "OVERDUE" ? "bg-red-500/8" : "bg-muted/30"}`}>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Receipt size={10} className={inv.status === "PAID" ? "text-emerald-400 shrink-0" : inv.status === "OVERDUE" ? "text-red-400 shrink-0" : "text-amber-400 shrink-0"} />
+                        <span className="text-muted-foreground font-mono truncate">{inv.number}</span>
+                      </div>
+                      <span className="font-medium shrink-0">{inv.totalHT.toLocaleString("fr-FR", { minimumFractionDigits: 0 })} €</span>
+                    </div>
+                  ))}
+                </div>
+                <button
+                  onClick={() => router.push("/finance")}
+                  className="w-full text-xs text-muted-foreground/50 hover:text-muted-foreground border border-dashed border-border/60 rounded-xl py-1.5 hover:border-border transition-colors"
+                >
+                  Voir dans Finance →
+                </button>
+              </Section>
+            )}
 
             <Section title="Prochaine action">
               <InlineField
