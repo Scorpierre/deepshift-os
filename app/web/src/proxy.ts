@@ -18,7 +18,14 @@ async function expectedToken(): Promise<string> {
     .join("");
 }
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/webhooks/n8n", "/api/webhooks/gmail-poll"];
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/api/webhooks/n8n",
+  "/api/webhooks/gmail-poll",
+  "/api/cron/daily-outreach",
+  "/api/cron/process-followups",
+];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
