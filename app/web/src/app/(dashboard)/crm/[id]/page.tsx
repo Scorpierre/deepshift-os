@@ -431,8 +431,8 @@ function EmailModal({
         body: JSON.stringify({ subject: draft.subject, body: draft.body }),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(`Erreur lors de l'envoi : ${(err as { error?: string }).error ?? res.statusText}`);
+        const err = await res.json().catch(() => ({ error: res.statusText }));
+        alert((err as { error?: string }).error ?? "Erreur lors de l'envoi.");
         return;
       }
       await res.json();
