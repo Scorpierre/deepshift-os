@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Calendar, Check, ChevronDown, Loader2,
-  MessageSquare, Package, Plus, Trash2, X,
+  MessageSquare, Package, Plus, RefreshCw, Sparkles, Trash2, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -145,6 +145,10 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "milestones" | "deliveries" | "notes">("overview");
 
+  // IA génération
+  const [generating, setGenerating] = useState(false);
+  const [generatingAuto, setGeneratingAuto] = useState(false);
+
   // New milestone form
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
   const [newMilestone, setNewMilestone] = useState({ name: "", dueAt: "" });
@@ -165,7 +169,37 @@ export default function ProjectPage() {
     setProject(data);
   }, [id]);
 
-  useEffect(() => { load().finally(() => setLoading(false)); }, [load]);
+  useEffect(() => {
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  // Polling si pas encore de milestones (génération auto en cours)
+  useEffect(() => {
+    if (!project) return;
+    if (project.milestones.length > 0) return;
+    setGeneratingAuto(true);
+    const interval = setInterval(async () => {
+      const data = await fetch(`/api/projects/${id}`).then((r) => r.json());
+      if (data.milestones?.length > 0) {
+        setProject(data);
+        setGeneratingAuto(false);
+        clearInterval(interval);
+      }
+    }, 2000);
+    const timeout = setTimeout(() => { clearInterval(interval); setGeneratingAuto(false); }, 30000);
+    return () => { clearInterval(interval); clearTimeout(timeout); };
+  }, [project?.milestones.length === 0, id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function generateMilestones(clearExisting: boolean) {
+    setGenerating(true);
+    await fetch("/api/ai/generate-milestones", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: id, clearExisting }),
+    });
+    await load();
+    setGenerating(false);
+  }
 
   async function patch(data: Record<string, unknown>) {
     const updated = await fetch(`/api/projects/${id}`, {
@@ -396,7 +430,48 @@ export default function ProjectPage() {
         {/* ── Étapes & tâches ────────────────────────────────────────────── */}
         {tab === "milestones" && (
           <div className="max-w-2xl space-y-4">
-            {project.milestones.length === 0 && !showMilestoneForm && (
+
+            {/* Barre d'actions IA */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground/50">
+                {project.milestones.length > 0
+                  ? `${totalTasks(project.milestones).done}/${totalTasks(project.milestones).total} tâches`
+                  : ""}
+              </p>
+              <div className="flex items-center gap-2">
+                {project.milestones.length > 0 && (
+                  <button
+                    onClick={() => generateMilestones(true)}
+                    disabled={generating}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border hover:border-border/80 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {generating ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+                    Régénérer
+                  </button>
+                )}
+                <button
+                  onClick={() => generateMilestones(false)}
+                  disabled={generating || generatingAuto}
+                  className="flex items-center gap-1.5 text-xs bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 border border-violet-500/20 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {generating || generatingAuto
+                    ? <Loader2 size={11} className="animate-spin" />
+                    : <Sparkles size={11} />}
+                  {generating || generatingAuto ? "Génération…" : "Générer avec IA"}
+                </button>
+              </div>
+            </div>
+
+            {/* État génération auto en cours */}
+            {generatingAuto && project.milestones.length === 0 && (
+              <div className="border border-violet-500/20 bg-violet-500/5 rounded-2xl p-6 flex flex-col items-center gap-3">
+                <Loader2 size={20} className="animate-spin text-violet-400" />
+                <p className="text-sm text-violet-300">Claude analyse le contexte et génère les étapes…</p>
+                <p className="text-xs text-muted-foreground/50">Basé sur l'historique des échanges avec le client</p>
+              </div>
+            )}
+
+            {project.milestones.length === 0 && !showMilestoneForm && !generatingAuto && (
               <p className="text-sm text-muted-foreground/40 text-center py-8">Aucune étape définie.</p>
             )}
 

@@ -50,5 +50,21 @@ export async function POST(request: NextRequest) {
     },
   });
 
+  // Génération IA des étapes en arrière-plan (fire & forget)
+  generateMilestonesAsync(project.id);
+
   return NextResponse.json(project, { status: 201 });
+}
+
+async function generateMilestonesAsync(projectId: string) {
+  try {
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+    await fetch(`${baseUrl}/api/ai/generate-milestones`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId, clearExisting: false }),
+    });
+  } catch (err) {
+    console.error("[generateMilestonesAsync] error:", err);
+  }
 }
