@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Bell, Check, ChevronDown, Euro, ExternalLink,
-  FileText, Globe, Loader2, Mail, Pencil, Plus, Receipt, Send,
+  FileText, FolderKanban, Globe, Loader2, Mail, Pencil, Plus, Receipt, Send,
   Sparkles, Tag, Trash2, X,
 } from "lucide-react";
 
@@ -563,6 +563,7 @@ export default function ProspectPage() {
   const [newReminder, setNewReminder] = useState({ note: "", dueAt: "" });
   const [addingReminder, setAddingReminder] = useState(false);
   const [finance, setFinance] = useState<FinanceSummary | null>(null);
+  const [creatingProject, setCreatingProject] = useState(false);
 
   const load = useCallback(async () => {
     const data = await fetch(`/api/prospects/${id}`).then((r) => r.json());
@@ -885,6 +886,25 @@ export default function ProspectPage() {
                 >
                   <FileText size={13} />
                   Créer un devis
+                </button>
+              )}
+              {prospect.status === "WON" && (
+                <button
+                  onClick={async () => {
+                    setCreatingProject(true);
+                    const res = await fetch("/api/projects", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ prospectId: id, name: `Projet — ${prospect.company ?? prospect.name}` }),
+                    });
+                    const project = await res.json();
+                    router.push(`/projets/${project.id}`);
+                  }}
+                  disabled={creatingProject}
+                  className="w-full flex items-center justify-center gap-2 text-sm bg-violet-500/12 text-violet-300 border border-violet-500/20 px-3 py-2 rounded-xl hover:bg-violet-500/20 disabled:opacity-50 transition-all"
+                >
+                  {creatingProject ? <Loader2 size={13} className="animate-spin" /> : <FolderKanban size={13} />}
+                  Créer un projet
                 </button>
               )}
             </Section>

@@ -53,6 +53,7 @@ model Prospect {
   reminders Reminder[]
   quotes    Quote[]
   invoices  Invoice[]
+  projects  Project[]
 
   @@index([status])
   @@index([updatedAt])
@@ -220,4 +221,112 @@ model PaymentReminder {
 enum PaymentReminderType {
   DAY_30
   DAY_45
+}
+
+// ─── Projets ──────────────────────────────────────────────────────────────────
+
+model Project {
+  id          String        @id @default(cuid())
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  prospectId  String
+  prospect    Prospect      @relation(fields: [prospectId], references: [id])
+
+  name        String
+  description String?       @db.Text
+  status      ProjectStatus @default(BRIEF)
+  startDate   DateTime?
+  deadline    DateTime?
+  budget      Float?
+
+  milestones  Milestone[]
+  deliveries  Delivery[]
+  clientNotes ClientNote[]
+
+  @@index([prospectId])
+  @@index([status])
+}
+
+enum ProjectStatus {
+  BRIEF
+  IN_PROGRESS
+  REVIEW
+  DELIVERED
+  COMPLETED
+  ON_HOLD
+}
+
+model Milestone {
+  id          String          @id @default(cuid())
+  createdAt   DateTime        @default(now())
+
+  projectId   String
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  dueAt       DateTime?
+  status      MilestoneStatus @default(PENDING)
+  order       Int             @default(0)
+
+  tasks       Task[]
+
+  @@index([projectId])
+}
+
+enum MilestoneStatus {
+  PENDING
+  IN_PROGRESS
+  DONE
+}
+
+model Task {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+
+  milestoneId String
+  milestone   Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  title       String
+  done        Boolean   @default(false)
+  order       Int       @default(0)
+
+  @@index([milestoneId])
+}
+
+model Delivery {
+  id          String    @id @default(cuid())
+  createdAt   DateTime  @default(now())
+
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String?   @db.Text
+  deliveredAt DateTime  @default(now())
+  clientOk    Boolean?
+  feedback    String?   @db.Text
+
+  @@index([projectId])
+}
+
+model ClientNote {
+  id        String         @id @default(cuid())
+  createdAt DateTime       @default(now())
+
+  projectId String
+  project   Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  content   String         @db.Text
+  type      ClientNoteType @default(OTHER)
+
+  @@index([projectId])
+}
+
+enum ClientNoteType {
+  MEETING
+  FEEDBACK
+  DECISION
+  OTHER
 }
