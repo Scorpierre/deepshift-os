@@ -141,6 +141,82 @@ export async function getEmailMessage(gmailId: string): Promise<{
   return { gmailId, from, subject, body };
 }
 
+export type EmailAttachment = {
+  filename: string;
+  mimeType: string;
+  data: string; // base64 standard (pas base64url)
+};
+
+/** Extrait récursivement les métadonnées des pièces jointes d'un payload Gmail */
+function extractAttachmentMeta(
+  payload: Record<string, unknown>,
+  messageId: string
+): { filename: string; mimeType: string; attachmentId: string; messageId: string }[] {
+  const results: { filename: string; mimeType: string; attachmentId: string; messageId: string }[] = [];
+
+  const body = payload.body as { attachmentId?: string; size?: number } | undefined;
+  const filename = payload.filename as string | undefined;
+  const mimeType = payload.mimeType as string | undefined;
+
+  if (body?.attachmentId && filename && mimeType) {
+    results.push({ filename, mimeType, attachmentId: body.attachmentId, messageId });
+  }
+
+  const parts = payload.parts as Record<string, unknown>[] | undefined;
+  if (parts) {
+    for (const part of parts) {
+      results.push(...extractAttachmentMeta(part, messageId));
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Récupère les pièces jointes PDF et images d'un email Gmail.
+ * Limite : 5 Mo par fichier. Ignore silencieusement les erreurs.
+ */
+export async function getEmailAttachments(messageId: string): Promise<EmailAttachment[]> {
+  const accessToken = await getAccessToken();
+
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages/${messageId}?format=full`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+
+  const supported = extractAttachmentMeta(data.payload ?? {}, messageId).filter(
+    (a) => a.mimeType === "application/pdf" || a.mimeType.startsWith("image/")
+  );
+
+  const attachments: EmailAttachment[] = [];
+
+  for (const att of supported) {
+    try {
+      const attRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${att.messageId}/attachments/${att.attachmentId}`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+      const attData = await attRes.json();
+      if (!attData.data) continue;
+
+      // Limite 5 Mo (base64url ~6.7M chars)
+      if (attData.data.length > 6_800_000) {
+        console.warn(`[getEmailAttachments] ${att.filename} trop volumineux, ignoré`);
+        continue;
+      }
+
+      // base64url → base64 standard
+      const base64 = (attData.data as string).replace(/-/g, "+").replace(/_/g, "/");
+      attachments.push({ filename: att.filename, mimeType: att.mimeType, data: base64 });
+    } catch (err) {
+      console.error(`[getEmailAttachments] erreur pour ${att.filename}:`, err);
+    }
+  }
+
+  return attachments;
+}
+
 export async function sendEmail({
   to,
   subject,
