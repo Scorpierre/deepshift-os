@@ -1,6 +1,6 @@
 # DeepShift — Suivi d'avancement
 
-> Dernière mise à jour : 2026-03-30
+> Dernière mise à jour : 2026-05-02
 
 ---
 
@@ -71,6 +71,15 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 | Séquence relances email | ✅ Fait | `/api/ai/draft-followup` (relance #1 J+3 et #2 J+7) + `/api/cron/check-followups` pour n8n |
 | Gmail OAuth configuré | ✅ Fait | Client ID + Secret + Refresh Token dans `.env.local` — compte `scopierres@gmail.com` |
 | Envoi email depuis la fiche | ✅ Fait | Bouton "Envoyer" dans la modale Claude — envoie via Gmail API + sauvegarde en base + mise à jour timeline |
+| Optimisation calls Claude | ✅ Fait | `draft-email` réutilise `aiSummary` déjà en base — passé de 2 calls Claude à 1 par email généré |
+| Logger calls Claude | ✅ Fait | `anthropic.ts` loggue chaque appel (model, tokens input/output, fichier appelant) dans les logs Docker |
+| Statut CONTACTED auto à l'envoi | ✅ Fait | Envoi d'un email → prospect passe en CONTACTED depuis NEW/SCORING/SCORED/VIP/LOST/ARCHIVED |
+| Analyse emails entrants | ✅ Fait | Endpoint `/api/webhooks/gmail-poll` — appelé par n8n toutes les 24h — analyse intent Claude Haiku → met à jour statut + crée reminder si LATER |
+| Lecture pièces jointes emails | ✅ Fait | `/api/emails/analyze` lit les PDF et images dans les emails entrants via Gmail API — transmis à Claude comme blocs `document`/`image` |
+| Upload documents prospect | ✅ Fait | Upload PDF/image depuis fiche prospect → stocké en base (`ProspectDocument`) → transmis à Claude lors de la génération de jalons |
+| Module Finance | ✅ Fait | `/finance` — dashboard CA (encaissé/en attente/prévisionnel), CRUD devis + statuts (DRAFT→SENT→ACCEPTED), CRUD factures + marquage payé, liaison devis→facture |
+| Module Projets | ✅ Fait | `/projets` + `/projets/[id]` — milestones + tâches, livraisons avec validation client OK/À revoir, échanges client typés, génération IA jalons (Sonnet), suppression cascade |
+| Fix cascade delete prospect | ✅ Fait | Suppression d'un prospect supprime Quote, Invoice, Project, Email, Reminder, ProspectDocument en cascade (schéma Prisma + migration) |
 
 ---
 
@@ -78,11 +87,11 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Module | Statut | Notes |
 |--------|--------|-------|
-| CRM & Prospection | ✅ Fait | Kanban pipeline (LOST masqué, auto-LOST), fiche prospect 3 colonnes, scoring IA (score + tags + action), email personnalisé Claude (scraping site/FB) + envoi Gmail, relances auto J+3/J+7 (prêtes pour n8n), timeline emails, rappels |
-| Gestion de Projets | ⬜ À faire | Kanban, suivi temps, jalons |
-| Finance | ⬜ À faire | Devis, factures, relances paiement |
+| CRM & Prospection | ✅ Fait | Kanban pipeline (LOST masqué, auto-LOST), fiche prospect 3 colonnes, scoring IA (score + tags + action), email personnalisé Claude (optimisé — 1 call) + envoi Gmail, relances auto J+3/J+7, timeline emails, rappels, analyse emails entrants (intent → statut auto), lecture pièces jointes PDF/images, upload documents prospect pour contexte IA |
+| Gestion de Projets | ✅ Fait | Liste projets + fiche projet (4 onglets), milestones + tâches (CRUD complet), livraisons avec validation client, échanges/notes client, génération IA des jalons (Sonnet), suppression projet en cascade, champ notes prospect |
+| Finance | ✅ Fait | Dashboard CA (encaissé / en attente / prévisionnel), devis (DRAFT→SENT→ACCEPTED), factures (UNPAID→PAID), liaison devis→facture, marquage paiement reçu |
 | Interne / Admin | ⬜ À faire | Abonnements, base de connaissance, weekly review |
-| Agenda & IA centrale | ⬜ À faire | Google Calendar, chat IA, notifications |
+| Agenda & IA centrale | ⬜ À faire | Google Calendar, bouton RDV depuis fiche prospect, chat IA, notifications |
 
 ---
 
@@ -106,7 +115,7 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 | Service | Statut | Notes |
 |---------|--------|-------|
 | Claude API | ✅ Fait | Connecté dans n8n + clé dans app Next.js (.env.local) |
-| Gmail OAuth | ✅ Fait | OAuth2 Desktop app — refresh token configuré — envoi depuis `scopierres@gmail.com` |
+| Gmail OAuth | ✅ Fait | OAuth2 Desktop app — refresh token configuré — envoi depuis `scopierres@gmail.com` — token à regénérer via `get-refresh-token.mjs` si invalid_grant |
 | Google Calendar API | ⬜ À configurer | Sync agenda |
 | GitHub (webhooks n8n) | ⬜ À configurer | Onboarding client → création repo |
 | Granola | ⬜ Optionnel | Transcription appels (~15€/mois) |
@@ -118,8 +127,9 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 | Workflow | Statut | Notes |
 |----------|--------|-------|
 | Analyse prospect → scraping → scoring Claude → CRM | ✅ Fait | Webhook `/webhook/prospect-analysis` — déclenché à la création d'un prospect avec URL |
-| Relances auto J+3/J+7 → email Claude → envoi Gmail | ⬜ À faire | Endpoints prêts (`/api/cron/check-followups` + `/api/ai/draft-followup`) — workflow n8n à créer |
-| Analyse réponses emails → scoring → statut prospect | ⬜ À faire | Nécessite sync Gmail entrant |
+| File 9h — envoi auto prospects SCORED | ✅ Fait | `/api/cron/daily-outreach` — tous les SCORED sans email → Claude Sonnet → envoi Gmail → CONTACTED — n8n Schedule mardi/mercredi/jeudi 9h |
+| Relances auto J+3/J+7 + auto-lost J+10 | ✅ Fait | `/api/cron/process-followups` — Haiku génère relance → envoi Gmail → auto-lost après 3 emails sans réponse — n8n Schedule mardi/mercredi/jeudi 9h |
+| Analyse réponses emails → intent → statut prospect | ✅ Fait | Polling n8n 24h — scan inbox 2 derniers jours — intent Claude Haiku → INTERESTED/NEEDS_INFO → QUALIFIED, NOT_INTERESTED → LOST, PROPOSAL_REQUESTED → PROPOSAL_SENT, LATER → reminder, UNCLEAR → ARCHIVED |
 | Génération devis → envoi → relance | ⬜ À faire | — |
 | Onboarding client → projet → repo GitHub → email bienvenue | ⬜ À faire | — |
 | Facturation livraison → relances paiement | ⬜ À faire | — |
