@@ -86,6 +86,7 @@ type Prospect = {
   nextActionAt: string | null;
   nextActionNote: string | null;
   companyDescription: string | null;
+  prospectNotes: string | null;
   aiSummary: string | null;
   aiScoreReason: string | null;
   aiTags: string[];
@@ -810,6 +811,14 @@ export default function ProspectPage() {
                 value={prospect.companyDescription}
                 placeholder="Notes libres sur l'entreprise, contexte, observations, pain points…"
                 onSave={(v) => patchProspect({ companyDescription: v })}
+              />
+            </Section>
+
+            <Section title="Brief / Notes projet">
+              <AutoTextarea
+                value={prospect.prospectNotes}
+                placeholder="Informations complémentaires à transmettre à l'IA : cahier des charges oral, contraintes techniques, préférences client, points importants non capturés par email…"
+                onSave={(v) => patchProspect({ prospectNotes: v })}
               />
             </Section>
 

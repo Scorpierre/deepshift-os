@@ -68,6 +68,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
         ...(body.nextActionAt !== undefined && { nextActionAt: body.nextActionAt ? new Date(body.nextActionAt as string) : null }),
         ...(body.nextActionNote !== undefined && { nextActionNote: body.nextActionNote as string }),
         ...(body.companyDescription !== undefined && { companyDescription: body.companyDescription as string }),
+        ...(body.prospectNotes !== undefined && { prospectNotes: body.prospectNotes as string | null }),
         // Champs AI : en lecture seule via ce endpoint
       },
     });

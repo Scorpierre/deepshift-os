@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
         include: {
           emails: {
             orderBy: { sentAt: "desc" },
-            take: 6,
+            take: 15,
           },
         },
       },
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
   const attachments: { email: string; files: EmailAttachment[] }[] = [];
   const emailsWithGmailId = prospect.emails.filter((e) => e.gmailId);
 
-  for (const email of emailsWithGmailId.slice(0, 4)) {
+  for (const email of emailsWithGmailId.slice(0, 6)) {
     try {
       const files = await getEmailAttachments(email.gmailId!);
       if (files.length > 0) {
@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
 - Description entreprise : ${prospect.companyDescription ?? "Non renseignée"}
 - Résumé IA : ${prospect.aiSummary ?? "Non disponible"}
 - Tags : ${prospect.aiTags?.join(", ") || "aucun"}
+${prospect.prospectNotes ? `\n## Notes complémentaires (saisies manuellement)\n${prospect.prospectNotes}` : ""}
 
 ## Historique des échanges
 ${emailsContext}
@@ -128,7 +129,7 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
   }
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-5",
+    model: "claude-sonnet-4-6",
     max_tokens: 1024,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     messages: [{ role: "user", content: contentBlocks as any }],

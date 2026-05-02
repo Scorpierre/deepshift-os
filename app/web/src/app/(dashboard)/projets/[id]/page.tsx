@@ -144,6 +144,8 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "milestones" | "deliveries" | "notes">("overview");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   // IA génération
   const [generating, setGenerating] = useState(false);
@@ -199,6 +201,12 @@ export default function ProjectPage() {
     });
     await load();
     setGenerating(false);
+  }
+
+  async function deleteProject() {
+    setDeleting(true);
+    await fetch(`/api/projects/${id}`, { method: "DELETE" });
+    router.push("/projets");
   }
 
   async function patch(data: Record<string, unknown>) {
@@ -345,6 +353,33 @@ export default function ProjectPage() {
         )}
 
         <StatusDropdown value={project.status} onChange={(s) => patch({ status: s })} />
+
+        {confirmDelete ? (
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-muted-foreground">Supprimer ?</span>
+            <button
+              onClick={deleteProject}
+              disabled={deleting}
+              className="flex items-center gap-1 text-xs bg-red-500/20 text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-500/30 disabled:opacity-50 transition-colors"
+            >
+              {deleting && <Loader2 size={10} className="animate-spin" />}
+              Confirmer
+            </button>
+            <button
+              onClick={() => setConfirmDelete(false)}
+              className="text-xs text-muted-foreground hover:text-foreground px-2 py-1.5"
+            >
+              Annuler
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirmDelete(true)}
+            className="text-muted-foreground hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-500/10 shrink-0"
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
       </header>
 
       {/* ── Tabs ───────────────────────────────────────────────────────────── */}
