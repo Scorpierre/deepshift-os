@@ -149,7 +149,7 @@ model Quote {
   updatedAt DateTime @updatedAt
 
   prospectId String
-  prospect   Prospect @relation(fields: [prospectId], references: [id])
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
 
   number     String      @unique // DEVIS-2026-001
   title      String
@@ -180,7 +180,7 @@ model Invoice {
   updatedAt DateTime @updatedAt
 
   prospectId String
-  prospect   Prospect @relation(fields: [prospectId], references: [id])
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
 
   quoteId String? @unique
   quote   Quote?  @relation(fields: [quoteId], references: [id])
@@ -232,7 +232,7 @@ model Project {
   updatedAt   DateTime      @updatedAt
 
   prospectId  String
-  prospect    Prospect      @relation(fields: [prospectId], references: [id])
+  prospect    Prospect      @relation(fields: [prospectId], references: [id], onDelete: Cascade)
 
   name        String
   description String?       @db.Text
