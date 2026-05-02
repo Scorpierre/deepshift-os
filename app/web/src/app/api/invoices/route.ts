@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { InvoiceStatus } from "@prisma/client";
-
-async function generateInvoiceNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const count = await prisma.invoice.count({
-    where: { number: { startsWith: `FAC-${year}-` } },
-  });
-  return `FAC-${year}-${String(count + 1).padStart(3, "0")}`;
-}
+import { generateInvoiceNumber } from "@/lib/sequencing";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;

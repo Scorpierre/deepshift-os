@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_SONNET } from "@/config";
 
 export async function POST(request: NextRequest) {
   const { prospectId, context } = await request.json();
@@ -32,7 +34,7 @@ ${prospect.companyDescription}
     : "";
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: MODEL_SONNET,
     max_tokens: 1500,
     messages: [
       {
@@ -69,16 +71,8 @@ Réponds UNIQUEMENT en JSON valide :
     ],
   });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-
-  // Extraire le JSON même si Claude ajoute du texte autour
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  let parsed: { subject?: string; body?: string; insights?: string[] } = {};
-  try {
-    parsed = JSON.parse(jsonMatch?.[0] ?? "{}");
-  } catch {
-    // fallback
-  }
+  const raw = message.content[0].type === "text" ? message.content[0].text : "";
+  const parsed = parseAiJson<{ subject?: string; body?: string; insights?: string[] }>(raw, "draft-email") ?? {};
 
   return NextResponse.json({ ...parsed, scraped: !!prospect.aiSummary });
 }

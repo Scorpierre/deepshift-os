@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-
-async function generateInvoiceNumber(): Promise<string> {
-  const year = new Date().getFullYear();
-  const count = await prisma.invoice.count({
-    where: { number: { startsWith: `FAC-${year}-` } },
-  });
-  return `FAC-${year}-${String(count + 1).padStart(3, "0")}`;
-}
+import { generateInvoiceNumber } from "@/lib/sequencing";
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,8 +19,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const lines = quote.lines as any;
 
-  const [invoice] = await prisma.$transaction([
-    prisma.invoice.create({
+  const NON_PROGRESSABLE = ["WON", "LOST", "ARCHIVED"];
+
+  const invoice = await prisma.$transaction(async (tx) => {
+    const inv = await tx.invoice.create({
       data: {
         prospectId: quote.prospectId,
         quoteId: quote.id,
@@ -38,16 +33,20 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
         dueAt,
       },
       include: { prospect: { select: { id: true, name: true, company: true, email: true } } },
-    }),
-    prisma.quote.update({
-      where: { id },
-      data: { status: "ACCEPTED" },
-    }),
-    prisma.prospect.update({
+    });
+
+    await tx.quote.update({ where: { id }, data: { status: "ACCEPTED" } });
+
+    const prospect = await tx.prospect.findUnique({
       where: { id: quote.prospectId },
-      data: { status: "WON" },
-    }),
-  ]);
+      select: { status: true },
+    });
+    if (prospect && !NON_PROGRESSABLE.includes(prospect.status)) {
+      await tx.prospect.update({ where: { id: quote.prospectId }, data: { status: "WON" } });
+    }
+
+    return inv;
+  });
 
   return NextResponse.json(invoice, { status: 201 });
 }

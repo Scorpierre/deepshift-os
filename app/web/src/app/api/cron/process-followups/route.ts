@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { sendEmail, applyLabel } from "@/lib/gmail";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_HAIKU, FOLLOWUP_J3_MS, FOLLOWUP_J7_MS, FOLLOWUP_J10_MS } from "@/config";
 
-const J3 = 3 * 24 * 60 * 60 * 1000;
-const J7 = 7 * 24 * 60 * 60 * 1000;
-const J10 = 10 * 24 * 60 * 60 * 1000;
 
 /**
  * Appelé par n8n chaque mardi/mercredi/jeudi à 9h.
@@ -36,15 +35,15 @@ export async function POST(req: NextRequest) {
     const timeSinceLast = now - new Date(lastSent.sentAt).getTime();
 
     // Auto-lost J+10 après 3 emails sans réponse
-    if (sentEmails.length >= 3 && timeSinceLast >= J10) {
+    if (sentEmails.length >= 3 && timeSinceLast >= FOLLOWUP_J10_MS) {
       await prisma.prospect.update({ where: { id: prospect.id }, data: { status: "LOST" } });
       results.autoLost++;
       continue;
     }
 
     const followupNumber =
-      sentEmails.length === 1 && timeSinceLast >= J3 ? 1
-      : sentEmails.length === 2 && timeSinceLast >= J7 ? 2
+      sentEmails.length === 1 && timeSinceLast >= FOLLOWUP_J3_MS ? 1
+      : sentEmails.length === 2 && timeSinceLast >= FOLLOWUP_J7_MS ? 2
       : null;
 
     if (!followupNumber) continue;
@@ -55,7 +54,7 @@ export async function POST(req: NextRequest) {
       : `C'est la DEUXIÈME et DERNIÈRE RELANCE (J+7). Le prospect n'a toujours pas répondu.\n- 3-4 phrases maximum\n- Ton neutre, porte ouverte sans pression\n- Une seule question directe\n- Signature : "Pierre — DeepShift"`;
 
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
+      model: MODEL_HAIKU,
       max_tokens: 800,
       messages: [{
         role: "user",
@@ -81,31 +80,30 @@ Réponds UNIQUEMENT en JSON valide :
       }],
     });
 
-    const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    let parsed: { subject?: string; body?: string } = {};
-    try { parsed = JSON.parse(jsonMatch?.[0] ?? "{}"); } catch { /* fallback */ }
+    const raw = message.content[0].type === "text" ? message.content[0].text : "";
+    const parsed = parseAiJson<{ subject?: string; body?: string }>(raw, "process-followups") ?? {};
 
     if (!parsed.subject || !parsed.body) continue;
 
     const { gmailId } = await sendEmail({ to: prospect.email, subject: parsed.subject, body: parsed.body });
     await applyLabel(gmailId, "deepshift-prospect");
 
-    await prisma.email.create({
-      data: {
-        prospectId: prospect.id,
-        direction: "SENT",
-        subject: parsed.subject,
-        body: parsed.body,
-        sentAt: new Date(),
-        gmailId,
-      },
-    });
-
-    await prisma.prospect.update({
-      where: { id: prospect.id },
-      data: { lastContactedAt: new Date() },
-    });
+    await prisma.$transaction([
+      prisma.email.create({
+        data: {
+          prospectId: prospect.id,
+          direction: "SENT",
+          subject: parsed.subject,
+          body: parsed.body,
+          sentAt: new Date(),
+          gmailId,
+        },
+      }),
+      prisma.prospect.update({
+        where: { id: prospect.id },
+        data: { lastContactedAt: new Date() },
+      }),
+    ]);
 
     followupNumber === 1 ? results.followup1++ : results.followup2++;
   }

@@ -1,0 +1,54 @@
+{
+  "name": "Relances auto J+3/J+7 + auto-lost",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 2,3,4"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Mardi-Jeudi 9h Paris",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://10.0.1.4:3000/api/cron/process-followups",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-n8n-secret",
+              "value": "deepshift-n8n-secret-2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "process-followups",
+      "name": "Relances + auto-lost",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "Mardi-Jeudi 9h Paris": {
+      "main": [
+        [{ "node": "Relances + auto-lost", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

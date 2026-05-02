@@ -2,6 +2,7 @@
  * Client Gmail minimal — OAuth2 avec refresh token.
  * Pas de dépendance googleapis, juste fetch.
  */
+import { GMAIL_MAX_RESULTS } from "@/config";
 
 async function getAccessToken(): Promise<string> {
   const res = await fetch("https://oauth2.googleapis.com/token", {
@@ -114,7 +115,7 @@ export async function applyLabel(gmailId: string, labelName: string): Promise<vo
 export async function listUnreadEmailIds(): Promise<string[]> {
   const accessToken = await getAccessToken();
   const res = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:inbox+-from:me+newer_than:2d&maxResults=50",
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:inbox+-from:me+newer_than:2d&maxResults=${GMAIL_MAX_RESULTS}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
   const data = await res.json();

@@ -1,4 +1,5 @@
 import { extractText } from "@/lib/html";
+import { SCRAPE_TIMEOUT_MS } from "@/config";
 
 const BLOCKED_HOSTNAMES = /^(localhost|127\.|0\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/;
 
@@ -20,7 +21,7 @@ export async function scrapeUrl(url: string): Promise<string | null> {
 
   try {
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
+    const t = setTimeout(() => ctrl.abort(), SCRAPE_TIMEOUT_MS);
     const res = await fetch(url, {
       signal: ctrl.signal,
       headers: {

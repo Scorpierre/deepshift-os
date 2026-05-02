@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_HAIKU } from "@/config";
 
 /**
  * Génère une relance email pour un prospect qui n'a pas répondu.
@@ -46,7 +48,7 @@ Règles :
 - Signature : "Pierre — DeepShift"`;
 
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: MODEL_HAIKU,
     max_tokens: 800,
     messages: [
       {
@@ -74,14 +76,8 @@ Réponds UNIQUEMENT en JSON valide :
     ],
   });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  let parsed: { subject?: string; body?: string } = {};
-  try {
-    parsed = JSON.parse(jsonMatch?.[0] ?? "{}");
-  } catch {
-    // fallback
-  }
+  const raw = message.content[0].type === "text" ? message.content[0].text : "";
+  const parsed = parseAiJson<{ subject?: string; body?: string }>(raw, "draft-followup") ?? {};
 
   return NextResponse.json(parsed);
 }

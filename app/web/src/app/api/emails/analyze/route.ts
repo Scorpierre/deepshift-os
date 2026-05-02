@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_HAIKU } from "@/config";
 
 export async function POST(request: NextRequest) {
   const { emailId } = await request.json();
@@ -13,7 +15,7 @@ export async function POST(request: NextRequest) {
   if (!email) return NextResponse.json({ error: "Email not found" }, { status: 404 });
 
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: MODEL_HAIKU,
     max_tokens: 512,
     messages: [
       {
@@ -35,13 +37,8 @@ Réponds UNIQUEMENT en JSON :
     ],
   });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  let parsed: { summary?: string; intent?: string; recommended_action?: string } = {};
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    // parsing failed, keep empty
-  }
+  const raw = message.content[0].type === "text" ? message.content[0].text : "";
+  const parsed = parseAiJson<{ summary?: string; intent?: string; recommended_action?: string }>(raw, "emails-analyze") ?? {};
 
   const updated = await prisma.email.update({
     where: { id: emailId },

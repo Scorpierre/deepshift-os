@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { sendEmail, applyLabel } from "@/lib/gmail";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_SONNET } from "@/config";
 
 /**
  * Appelé par n8n chaque mardi/mercredi/jeudi à 9h (heure de Paris).
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
       : "";
 
     const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model: MODEL_SONNET,
       max_tokens: 1500,
       messages: [{
         role: "user",
@@ -79,10 +81,8 @@ Réponds UNIQUEMENT en JSON valide :
       }],
     });
 
-    const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    let parsed: { subject?: string; body?: string } = {};
-    try { parsed = JSON.parse(jsonMatch?.[0] ?? "{}"); } catch { /* fallback */ }
+    const raw = message.content[0].type === "text" ? message.content[0].text : "";
+    const parsed = parseAiJson<{ subject?: string; body?: string }>(raw, "daily-outreach") ?? {};
 
     if (!parsed.subject || !parsed.body) {
       results.push({ name: prospect.name, sent: false, reason: "Échec génération Claude" });
@@ -92,21 +92,22 @@ Réponds UNIQUEMENT en JSON valide :
     const { gmailId } = await sendEmail({ to: prospect.email, subject: parsed.subject, body: parsed.body });
     await applyLabel(gmailId, "deepshift-prospect");
 
-    await prisma.email.create({
-      data: {
-        prospectId: prospect.id,
-        direction: "SENT",
-        subject: parsed.subject,
-        body: parsed.body,
-        sentAt: new Date(),
-        gmailId,
-      },
-    });
-
-    await prisma.prospect.update({
-      where: { id: prospect.id },
-      data: { status: "CONTACTED", lastContactedAt: new Date() },
-    });
+    await prisma.$transaction([
+      prisma.email.create({
+        data: {
+          prospectId: prospect.id,
+          direction: "SENT",
+          subject: parsed.subject,
+          body: parsed.body,
+          sentAt: new Date(),
+          gmailId,
+        },
+      }),
+      prisma.prospect.update({
+        where: { id: prospect.id },
+        data: { status: "CONTACTED", lastContactedAt: new Date() },
+      }),
+    ]);
 
     results.push({ name: prospect.name, sent: true });
   }

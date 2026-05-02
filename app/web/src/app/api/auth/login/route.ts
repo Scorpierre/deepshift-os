@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHmac } from "crypto";
-
-function sessionToken(): string {
-  const secret = process.env.APP_SECRET!;
-  return createHmac("sha256", secret).update("session").digest("hex");
-}
+import { sessionToken } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   const { password } = await req.json();

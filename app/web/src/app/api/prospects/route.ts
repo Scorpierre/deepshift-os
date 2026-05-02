@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { ProspectStatus } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
 import { triggerN8nAnalysis } from "@/lib/n8n";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_HAIKU } from "@/config";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = request.nextUrl;
@@ -27,9 +29,23 @@ export async function GET(request: NextRequest) {
   return NextResponse.json(prospects);
 }
 
+type ProspectCreateBody = {
+  name: string;
+  company?: string;
+  email: string;
+  phone?: string;
+  linkedinUrl?: string;
+  websiteUrl?: string;
+  needType?: string[];
+  estimatedBudget?: number;
+  source?: string;
+  nextActionNote?: string;
+  nextActionAt?: string;
+  companyDescription?: string;
+};
+
 export async function POST(request: NextRequest) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let body: any;
+  let body: ProspectCreateBody;
   try {
     body = await request.json();
   } catch {
@@ -76,7 +92,7 @@ async function scoreProspectAsync(
 ) {
   try {
     const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
+      model: MODEL_HAIKU,
       max_tokens: 256,
       messages: [
         {
@@ -102,14 +118,8 @@ Réponds UNIQUEMENT en JSON :
       ],
     });
 
-    const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    let parsed: { score?: number; reason?: string; tags?: string[]; recommended_action?: string } = {};
-    try {
-      parsed = JSON.parse(jsonMatch?.[0] ?? "{}");
-    } catch {
-      // parsing failed — fallback SCORED
-    }
+    const raw = message.content[0].type === "text" ? message.content[0].text : "";
+    const parsed = parseAiJson<{ score?: number; reason?: string; tags?: string[]; recommended_action?: string }>(raw, "score-async") ?? {};
 
     const score = typeof parsed.score === "number" ? Math.min(10, Math.max(1, Math.round(parsed.score))) : null;
     let newStatus: ProspectStatus;
@@ -136,10 +146,12 @@ Réponds UNIQUEMENT en JSON :
       triggerN8nAnalysis(updated);
     }
   } catch (err) {
-    console.error("[scoreProspectAsync] scoring error:", err);
+    console.error("[scoreProspectAsync] scoring error for prospect", prospect.id, err);
     await prisma.prospect.update({
       where: { id: prospect.id },
       data: { status: "SCORED" as ProspectStatus },
-    }).catch(() => {});
+    }).catch((updateErr) => {
+      console.error("[scoreProspectAsync] fallback status update failed for prospect", prospect.id, updateErr);
+    });
   }
 }

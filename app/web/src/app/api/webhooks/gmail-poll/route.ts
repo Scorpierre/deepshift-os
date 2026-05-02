@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { listUnreadEmailIds, getEmailMessage, extractEmailAddress } from "@/lib/gmail";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_HAIKU } from "@/config";
 
 type Intent =
   | "INTERESTED"
@@ -34,7 +36,7 @@ async function analyzeEmail(
   prospectName: string
 ): Promise<{ intent: Intent; analysis: string; laterDate?: string }> {
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: MODEL_HAIKU,
     max_tokens: 300,
     messages: [
       {
@@ -68,18 +70,13 @@ Réponds UNIQUEMENT en JSON :
     ],
   });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  const match = raw.match(/\{[\s\S]*\}/);
-  try {
-    const parsed = JSON.parse(match?.[0] ?? "{}");
-    return {
-      intent: parsed.intent ?? "UNCLEAR",
-      analysis: parsed.analysis ?? "",
-      laterDate: parsed.laterDate ?? undefined,
-    };
-  } catch {
-    return { intent: "UNCLEAR", analysis: "" };
-  }
+  const raw = message.content[0].type === "text" ? message.content[0].text : "";
+  const parsed = parseAiJson<{ intent?: Intent; analysis?: string; laterDate?: string }>(raw, "gmail-poll");
+  return {
+    intent: parsed?.intent ?? "UNCLEAR",
+    analysis: parsed?.analysis ?? "",
+    laterDate: parsed?.laterDate ?? undefined,
+  };
 }
 
 /**
@@ -105,13 +102,24 @@ export async function POST(request: NextRequest) {
   let processed = 0;
   let skipped = 0;
 
-  for (const gmailId of toProcess) {
-    const message = await getEmailMessage(gmailId);
+  // Batch Gmail API calls (was N sequential HTTP requests)
+  const messages = await Promise.all(toProcess.map(getEmailMessage));
+
+  // Batch prospect lookup (was N separate DB queries)
+  const senderEmails = messages.map((m) => extractEmailAddress(m.from));
+  const matchingProspects = await prisma.prospect.findMany({
+    where: {
+      OR: senderEmails.map((e) => ({ email: { equals: e, mode: "insensitive" as const } })),
+    },
+  });
+  const prospectByEmail = new Map(matchingProspects.map((p) => [p.email.toLowerCase(), p]));
+
+  for (let i = 0; i < toProcess.length; i++) {
+    const gmailId = toProcess[i];
+    const message = messages[i];
     const senderEmail = extractEmailAddress(message.from);
 
-    const prospect = await prisma.prospect.findFirst({
-      where: { email: { equals: senderEmail, mode: "insensitive" } },
-    });
+    const prospect = prospectByEmail.get(senderEmail.toLowerCase());
 
     if (!prospect) { skipped++; continue; }
 

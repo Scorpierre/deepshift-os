@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
+import { MODEL_SONNET, EMAIL_HISTORY_TAKE } from "@/config";
 
 type GeneratedMilestone = {
   name: string;
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       include: {
         prospect: {
           include: {
-            emails: { orderBy: { sentAt: "desc" }, take: 15 },
+            emails: { orderBy: { sentAt: "desc" }, take: EMAIL_HISTORY_TAKE },
             documents: { orderBy: { createdAt: "desc" } },
           },
         },
@@ -114,16 +115,13 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
   }
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: MODEL_SONNET,
     max_tokens: 1024,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    messages: [{ role: "user", content: contentBlocks as any }],
+    messages: [{ role: "user", content: contentBlocks as Parameters<typeof anthropic.messages.create>[0]["messages"][0]["content"] }],
   });
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  console.log("[generate-milestones] raw AI response:", raw.slice(0, 500));
 
-  // Strip markdown code fences if present
   const stripped = raw.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
   const jsonMatch = stripped.match(/\{[\s\S]*\}/);
 
@@ -132,7 +130,7 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
     const parsed = JSON.parse(jsonMatch?.[0] ?? "{}");
     milestones = parsed.milestones ?? [];
   } catch (err) {
-    console.error("[generate-milestones] parse error:", err, "| raw:", raw.slice(0, 300));
+    console.error("[generate-milestones] parse error:", err);
     return NextResponse.json({ error: `Parsing IA échoué. Réponse reçue : ${raw.slice(0, 200)}` }, { status: 500 });
   }
 

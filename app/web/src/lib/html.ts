@@ -1,3 +1,5 @@
+import { TEXT_EXTRACTION_LIMIT } from "@/config";
+
 export function extractText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -11,5 +13,5 @@ export function extractText(html: string): string {
     .replace(/&#39;/g, "'")
     .replace(/\s{2,}/g, " ")
     .trim()
-    .slice(0, 6000);
+    .slice(0, TEXT_EXTRACTION_LIMIT);
 }

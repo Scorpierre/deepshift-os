@@ -346,3 +346,45 @@ enum ClientNoteType {
   DECISION
   OTHER
 }
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+
+model Expense {
+  id           String          @id @default(cuid())
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  label        String
+  vendor       String?
+  amount       Float
+  date         DateTime        @default(now())
+  category     ExpenseCategory
+  type         ExpenseType     @default(ONE_TIME)
+  billingCycle BillingCycle?
+  renewsAt     DateTime?
+  isActive     Boolean         @default(true)
+  notes        String?         @db.Text
+
+  @@index([type])
+  @@index([category])
+  @@index([isActive])
+}
+
+enum ExpenseCategory {
+  INFRA
+  TOOLS
+  MARKETING
+  FORMATION
+  EQUIPMENT
+  OTHER
+}
+
+enum ExpenseType {
+  ONE_TIME
+  SUBSCRIPTION
+}
+
+enum BillingCycle {
+  MONTHLY
+  ANNUAL
+}

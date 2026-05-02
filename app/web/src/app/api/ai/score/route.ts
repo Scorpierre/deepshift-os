@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
+import { parseAiJson } from "@/lib/parse-ai-json";
+import { MODEL_SONNET } from "@/config";
 
 export async function POST(request: NextRequest) {
   const { prospectId } = await request.json();
@@ -12,7 +14,7 @@ export async function POST(request: NextRequest) {
   if (!prospect) return NextResponse.json({ error: "Prospect not found" }, { status: 404 });
 
   const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-6",
+    model: MODEL_SONNET,
     max_tokens: 512,
     messages: [
       {
@@ -45,14 +47,8 @@ Réponds UNIQUEMENT en JSON :
     ],
   });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  let parsed: { score?: number; reason?: string; tags?: string[]; recommended_action?: string } = {};
-  try {
-    parsed = JSON.parse(jsonMatch?.[0] ?? "{}");
-  } catch {
-    // parsing failed
-  }
+  const raw = message.content[0].type === "text" ? message.content[0].text : "";
+  const parsed = parseAiJson<{ score?: number; reason?: string; tags?: string[]; recommended_action?: string }>(raw, "score") ?? {};
 
   const score = typeof parsed.score === "number" ? Math.min(10, Math.max(1, Math.round(parsed.score))) : null;
 
