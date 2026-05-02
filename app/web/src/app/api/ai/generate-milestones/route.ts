@@ -121,14 +121,19 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
   });
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  console.log("[generate-milestones] raw AI response:", raw.slice(0, 500));
+
+  // Strip markdown code fences if present
+  const stripped = raw.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
+  const jsonMatch = stripped.match(/\{[\s\S]*\}/);
 
   let milestones: GeneratedMilestone[] = [];
   try {
     const parsed = JSON.parse(jsonMatch?.[0] ?? "{}");
     milestones = parsed.milestones ?? [];
-  } catch {
-    return NextResponse.json({ error: "Parsing IA échoué." }, { status: 500 });
+  } catch (err) {
+    console.error("[generate-milestones] parse error:", err, "| raw:", raw.slice(0, 300));
+    return NextResponse.json({ error: `Parsing IA échoué. Réponse reçue : ${raw.slice(0, 200)}` }, { status: 500 });
   }
 
   if (clearExisting) {
