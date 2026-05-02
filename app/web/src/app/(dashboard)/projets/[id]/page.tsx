@@ -149,7 +149,6 @@ export default function ProjectPage() {
 
   // IA génération
   const [generating, setGenerating] = useState(false);
-  const [generatingAuto, setGeneratingAuto] = useState(false);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
   // New milestone form
@@ -175,23 +174,6 @@ export default function ProjectPage() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [load]);
-
-  // Polling si pas encore de milestones (génération auto en cours)
-  useEffect(() => {
-    if (!project) return;
-    if (project.milestones.length > 0) return;
-    setGeneratingAuto(true);
-    const interval = setInterval(async () => {
-      const data = await fetch(`/api/projects/${id}`).then((r) => r.json());
-      if (data.milestones?.length > 0) {
-        setProject(data);
-        setGeneratingAuto(false);
-        clearInterval(interval);
-      }
-    }, 2000);
-    const timeout = setTimeout(() => { clearInterval(interval); setGeneratingAuto(false); }, 30000);
-    return () => { clearInterval(interval); clearTimeout(timeout); };
-  }, [project?.milestones.length === 0, id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function generateMilestones(clearExisting: boolean) {
     setGenerating(true);
@@ -498,13 +480,13 @@ export default function ProjectPage() {
                 )}
                 <button
                   onClick={() => generateMilestones(false)}
-                  disabled={generating || generatingAuto}
+                  disabled={generating}
                   className="flex items-center gap-1.5 text-xs bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 border border-violet-500/20 px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {generating || generatingAuto
+                  {generating
                     ? <Loader2 size={11} className="animate-spin" />
                     : <Sparkles size={11} />}
-                  {generating || generatingAuto ? "Génération…" : "Générer avec IA"}
+                  {generating ? "Génération…" : "Générer avec IA"}
                 </button>
               </div>
             </div>
@@ -516,16 +498,7 @@ export default function ProjectPage() {
               </p>
             )}
 
-            {/* État génération auto en cours */}
-            {generatingAuto && project.milestones.length === 0 && (
-              <div className="border border-violet-500/20 bg-violet-500/5 rounded-2xl p-6 flex flex-col items-center gap-3">
-                <Loader2 size={20} className="animate-spin text-violet-400" />
-                <p className="text-sm text-violet-300">Claude analyse le contexte et génère les étapes…</p>
-                <p className="text-xs text-muted-foreground/50">Basé sur l'historique des échanges avec le client</p>
-              </div>
-            )}
-
-            {project.milestones.length === 0 && !showMilestoneForm && !generatingAuto && (
+            {project.milestones.length === 0 && !showMilestoneForm && (
               <p className="text-sm text-muted-foreground/40 text-center py-8">Aucune étape définie.</p>
             )}
 
