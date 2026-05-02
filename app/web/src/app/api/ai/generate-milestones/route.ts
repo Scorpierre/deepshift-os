@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { getEmailAttachments, EmailAttachment } from "@/lib/gmail";
 
 type GeneratedMilestone = {
   name: string;
@@ -10,7 +9,6 @@ type GeneratedMilestone = {
   tasks: string[];
 };
 
-// Blocs de contenu compatibles Anthropic SDK
 type TextBlock = { type: "text"; text: string };
 type DocumentBlock = { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string }; title?: string };
 type ImageBlock = { type: "image"; source: { type: "base64"; media_type: string; data: string } };
@@ -21,16 +19,13 @@ export async function POST(request: NextRequest) {
 
   if (!projectId) return NextResponse.json({ error: "projectId requis." }, { status: 400 });
 
-  // Charger le projet + prospect + emails (avec gmailId pour les pièces jointes)
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     include: {
       prospect: {
         include: {
-          emails: {
-            orderBy: { sentAt: "desc" },
-            take: 15,
-          },
+          emails: { orderBy: { sentAt: "desc" }, take: 15 },
+          documents: { orderBy: { createdAt: "desc" } },
         },
       },
     },
@@ -40,24 +35,6 @@ export async function POST(request: NextRequest) {
 
   const { prospect } = project;
 
-  // Récupérer les pièces jointes PDF/images des emails qui en ont un gmailId
-  const attachments: { email: string; files: EmailAttachment[] }[] = [];
-  const emailsWithGmailId = prospect.emails.filter((e) => e.gmailId);
-
-  for (const email of emailsWithGmailId.slice(0, 6)) {
-    try {
-      const files = await getEmailAttachments(email.gmailId!);
-      if (files.length > 0) {
-        attachments.push({ email: email.subject, files });
-      }
-    } catch (err) {
-      console.error(`[generate-milestones] attachments fetch error for ${email.gmailId}:`, err);
-    }
-  }
-
-  const totalAttachments = attachments.reduce((sum, a) => sum + a.files.length, 0);
-
-  // Résumé texte des emails
   const emailsContext = prospect.emails.length > 0
     ? prospect.emails.map((e) =>
         `[${e.direction === "SENT" ? "Envoyé" : "Reçu"} · ${new Date(e.sentAt).toLocaleDateString("fr-FR")}]\nObjet : ${e.subject}\n${e.body.slice(0, 600)}${e.body.length > 600 ? "…" : ""}`
@@ -68,6 +45,11 @@ export async function POST(request: NextRequest) {
   const deadlineInfo = project.deadline
     ? `Deadline : ${new Date(project.deadline).toLocaleDateString("fr-FR")} (${Math.round((new Date(project.deadline).getTime() - startDate.getTime()) / 86400000)} jours disponibles)`
     : "Pas de deadline fixée.";
+
+  const docs = prospect.documents;
+  const docsNote = docs.length > 0
+    ? `\n## Documents chargés (${docs.length} fichier${docs.length > 1 ? "s" : ""} ci-dessous)\nLis attentivement ces documents — ils peuvent contenir le cahier des charges, les specs techniques, ou le devis accepté.`
+    : "";
 
   const promptText = `Tu es un expert en gestion de projet IT freelance. Tu dois générer un plan de projet réaliste pour Pierre Connes (DeepShift), développeur web freelance spécialisé en sites vitrine, web apps sur mesure et consulting digital.
 
@@ -87,12 +69,12 @@ ${prospect.prospectNotes ? `\n## Notes complémentaires (saisies manuellement)\n
 
 ## Historique des échanges
 ${emailsContext}
-${totalAttachments > 0 ? `\n## Pièces jointes (${totalAttachments} document${totalAttachments > 1 ? "s" : ""} ci-dessous)\nLis attentivement les pièces jointes — elles peuvent contenir le cahier des charges, les specs techniques, ou le devis accepté.` : ""}
+${docsNote}
 
 ## Instructions
 Génère entre 3 et 5 étapes de projet (milestones) avec leurs tâches.
 Chaque étape doit être concrète et adaptée au type de projet détecté.
-Si des pièces jointes sont présentes, base-toi sur leur contenu pour affiner les étapes.
+Si des documents sont présents, base-toi sur leur contenu pour affiner les étapes.
 Les \`daysFromStart\` sont relatifs à la date de début du projet.
 Les tâches doivent être actionnables et précises.
 
@@ -108,23 +90,20 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
   ]
 }`;
 
-  // Construire les blocs de contenu : texte + pièces jointes
   const contentBlocks: ContentBlock[] = [{ type: "text", text: promptText }];
 
-  for (const { files } of attachments) {
-    for (const file of files) {
-      if (file.mimeType === "application/pdf") {
-        contentBlocks.push({
-          type: "document",
-          source: { type: "base64", media_type: "application/pdf", data: file.data },
-          title: file.filename,
-        });
-      } else if (file.mimeType.startsWith("image/")) {
-        contentBlocks.push({
-          type: "image",
-          source: { type: "base64", media_type: file.mimeType, data: file.data },
-        });
-      }
+  for (const doc of docs) {
+    if (doc.mimeType === "application/pdf") {
+      contentBlocks.push({
+        type: "document",
+        source: { type: "base64", media_type: "application/pdf", data: doc.data },
+        title: doc.filename,
+      });
+    } else if (doc.mimeType.startsWith("image/")) {
+      contentBlocks.push({
+        type: "image",
+        source: { type: "base64", media_type: doc.mimeType, data: doc.data },
+      });
     }
   }
 
@@ -171,5 +150,5 @@ Réponds UNIQUEMENT en JSON valide, sans markdown :
     })
   );
 
-  return NextResponse.json({ milestones: created, attachmentsRead: totalAttachments });
+  return NextResponse.json({ milestones: created, documentsRead: docs.length });
 }

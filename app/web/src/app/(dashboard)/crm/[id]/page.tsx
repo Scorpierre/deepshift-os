@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft, Bell, Check, ChevronDown, Euro, ExternalLink,
-  FileText, FolderKanban, Globe, Loader2, Mail, Pencil, Plus, Receipt, Send,
+  FileText, FolderKanban, Globe, Loader2, Mail, Paperclip, Pencil, Plus, Receipt, Send,
   Sparkles, Tag, Trash2, X,
 } from "lucide-react";
 
@@ -62,6 +62,13 @@ type Reminder = {
   note: string;
   status: "PENDING" | "DONE" | "SNOOZED";
   type: string;
+};
+
+type ProspectDocumentRef = {
+  id: string;
+  filename: string;
+  mimeType: string;
+  createdAt: string;
 };
 
 type FinanceSummary = {
@@ -565,15 +572,19 @@ export default function ProspectPage() {
   const [addingReminder, setAddingReminder] = useState(false);
   const [finance, setFinance] = useState<FinanceSummary | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [documents, setDocuments] = useState<ProspectDocumentRef[]>([]);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
 
   const load = useCallback(async () => {
     const data = await fetch(`/api/prospects/${id}`).then((r) => r.json());
     setProspect(data);
-    const [q, inv] = await Promise.all([
+    const [q, inv, docs] = await Promise.all([
       fetch(`/api/quotes?prospectId=${id}`).then((r) => r.json()),
       fetch(`/api/invoices?prospectId=${id}`).then((r) => r.json()),
+      fetch(`/api/prospects/${id}/documents`).then((r) => r.json()),
     ]);
     setFinance({ quotes: q, invoices: inv });
+    setDocuments(docs);
   }, [id]);
 
   useEffect(() => {
@@ -627,6 +638,20 @@ export default function ProspectPage() {
       body: JSON.stringify({ status: "DONE" }),
     });
     await load();
+  }
+
+  async function uploadDocument(file: File) {
+    setUploadingDoc(true);
+    const form = new FormData();
+    form.append("file", file);
+    await fetch(`/api/prospects/${id}/documents`, { method: "POST", body: form });
+    await load();
+    setUploadingDoc(false);
+  }
+
+  async function deleteDocument(docId: string) {
+    await fetch(`/api/prospect-documents/${docId}`, { method: "DELETE" });
+    setDocuments((prev) => prev.filter((d) => d.id !== docId));
   }
 
   async function deleteProspect() {
@@ -820,6 +845,43 @@ export default function ProspectPage() {
                 placeholder="Informations complémentaires à transmettre à l'IA : cahier des charges oral, contraintes techniques, préférences client, points importants non capturés par email…"
                 onSave={(v) => patchProspect({ prospectNotes: v })}
               />
+            </Section>
+
+            <Section title={`Documents${documents.length > 0 ? ` · ${documents.length}` : ""}`}>
+              <div className="space-y-2">
+                {documents.map((doc) => (
+                  <div key={doc.id} className="flex items-center gap-2.5 px-3 py-2 bg-muted/30 border border-border rounded-xl group/doc">
+                    <FileText size={13} className="shrink-0 text-muted-foreground" />
+                    <span className="text-sm flex-1 truncate">{doc.filename}</span>
+                    <span className="text-[10px] text-muted-foreground shrink-0">
+                      {doc.mimeType === "application/pdf" ? "PDF" : "Image"}
+                    </span>
+                    <button
+                      onClick={() => deleteDocument(doc.id)}
+                      className="opacity-0 group-hover/doc:opacity-100 p-0.5 text-muted-foreground hover:text-red-400 transition-all shrink-0"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+
+                <label className={`flex items-center gap-2 w-full text-sm border border-dashed border-border/60 rounded-xl px-3 py-2 transition-colors cursor-pointer ${uploadingDoc ? "opacity-50 pointer-events-none" : "text-muted-foreground/50 hover:text-foreground hover:border-border"}`}>
+                  {uploadingDoc
+                    ? <Loader2 size={13} className="animate-spin shrink-0" />
+                    : <Paperclip size={13} className="shrink-0" />}
+                  {uploadingDoc ? "Chargement…" : "Ajouter un document (PDF, image)"}
+                  <input
+                    type="file"
+                    accept=".pdf,image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadDocument(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              </div>
             </Section>
 
             {(prospect.aiSummary || prospect.aiScoreReason || prospect.aiRecommendedAction || prospect.aiTags?.length > 0) && (

@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { listUnreadEmailIds, getEmailMessage, getEmailAttachments, extractEmailAddress, type EmailAttachment } from "@/lib/gmail";
-
-type TextBlock = { type: "text"; text: string };
-type DocumentBlock = { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string }; title?: string };
-type ImageBlock = { type: "image"; source: { type: "base64"; media_type: string; data: string } };
-type ContentBlock = TextBlock | DocumentBlock | ImageBlock;
+import { listUnreadEmailIds, getEmailMessage, extractEmailAddress } from "@/lib/gmail";
 
 type Intent =
   | "INTERESTED"
@@ -16,20 +11,15 @@ type Intent =
   | "LATER"
   | "UNCLEAR";
 
-const INTENT_CONFIG: Record<Intent, {
-  status?: string;
-  tag: string;
-  action?: string;
-}> = {
-  INTERESTED:         { status: "QUALIFIED",     tag: "intéressé",     action: "Relancer rapidement — intérêt confirmé" },
+const INTENT_CONFIG: Record<Intent, { status?: string; tag: string; action?: string }> = {
+  INTERESTED:         { status: "QUALIFIED",     tag: "intéressé",      action: "Relancer rapidement — intérêt confirmé" },
   NEEDS_INFO:         { status: "QUALIFIED",     tag: "besoin d'infos", action: "Répondre à ses questions" },
-  UNCLEAR:            { status: "QUALIFIED",     tag: "à clarifier",   action: "Appeler pour clarifier la réponse" },
-  PROPOSAL_REQUESTED: { status: "PROPOSAL_SENT", tag: "devis demandé", action: "Envoyer le devis" },
+  UNCLEAR:            { status: "QUALIFIED",     tag: "à clarifier",    action: "Appeler pour clarifier la réponse" },
+  PROPOSAL_REQUESTED: { status: "PROPOSAL_SENT", tag: "devis demandé",  action: "Envoyer le devis" },
   LATER:              { status: "ARCHIVED",      tag: "plus tard" },
   NOT_INTERESTED:     { status: "ARCHIVED",      tag: "pas intéressé" },
 };
 
-// Statuts qu'on ne doit jamais rétrograder
 const STATUS_ORDER = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON"];
 
 function canTransition(current: string, target: string): boolean {
@@ -41,10 +31,15 @@ function canTransition(current: string, target: string): boolean {
 
 async function analyzeEmail(
   emailBody: string,
-  prospectName: string,
-  attachments: EmailAttachment[] = []
+  prospectName: string
 ): Promise<{ intent: Intent; analysis: string; laterDate?: string }> {
-  const promptText = `Tu analyses la réponse d'un prospect à un email de prospection commercial (DeepShift — web apps sur mesure).
+  const message = await anthropic.messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 300,
+    messages: [
+      {
+        role: "user",
+        content: `Tu analyses la réponse d'un prospect à un email de prospection commercial (DeepShift — web apps sur mesure).
 
 Prospect : ${prospectName}
 
@@ -52,13 +47,12 @@ Email reçu :
 ---
 ${emailBody.slice(0, 2000)}
 ---
-${attachments.length > 0 ? `\nPièces jointes (${attachments.length}) ci-dessous — elles peuvent contenir un cahier des charges, un devis, ou des specs.` : ""}
 
 Détermine l'intent de ce prospect parmi :
 - INTERESTED : intéressé, veut en savoir plus, propose un rendez-vous
 - NOT_INTERESTED : refuse clairement, pas intéressé
 - NEEDS_INFO : pose des questions sur l'offre, demande des précisions
-- PROPOSAL_REQUESTED : demande un devis ou une proposition concrète (ou envoie un cahier des charges)
+- PROPOSAL_REQUESTED : demande un devis ou une proposition concrète
 - LATER : pas maintenant mais ouvre la porte plus tard ("rappelez-moi dans X", "recontactez-moi en Y")
 - UNCLEAR : réponse vague, hors sujet, ou impossible à interpréter
 
@@ -69,32 +63,9 @@ Réponds UNIQUEMENT en JSON :
   "intent": "INTERESTED|NOT_INTERESTED|NEEDS_INFO|PROPOSAL_REQUESTED|LATER|UNCLEAR",
   "analysis": "1 phrase résumant la réponse du prospect",
   "laterDate": "YYYY-MM-DD ou null"
-}`;
-
-  const contentBlocks: ContentBlock[] = [{ type: "text", text: promptText }];
-
-  for (const file of attachments) {
-    if (file.mimeType === "application/pdf") {
-      contentBlocks.push({
-        type: "document",
-        source: { type: "base64", media_type: "application/pdf", data: file.data },
-        title: file.filename,
-      });
-    } else if (file.mimeType.startsWith("image/")) {
-      contentBlocks.push({
-        type: "image",
-        source: { type: "base64", media_type: file.mimeType, data: file.data },
-      });
-    }
-  }
-
-  const model = attachments.length > 0 ? "claude-sonnet-4-5" : "claude-haiku-4-5-20251001";
-
-  const message = await anthropic.messages.create({
-    model,
-    max_tokens: 300,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    messages: [{ role: "user", content: contentBlocks as any }],
+}`,
+      },
+    ],
   });
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
@@ -122,11 +93,8 @@ export async function POST(request: NextRequest) {
   }
 
   const gmailIds = await listUnreadEmailIds();
-  if (gmailIds.length === 0) {
-    return NextResponse.json({ processed: 0, skipped: 0 });
-  }
+  if (gmailIds.length === 0) return NextResponse.json({ processed: 0, skipped: 0 });
 
-  // Filtre les emails déjà traités en base
   const existing = await prisma.email.findMany({
     where: { gmailId: { in: gmailIds } },
     select: { gmailId: true },
@@ -145,27 +113,15 @@ export async function POST(request: NextRequest) {
       where: { email: { equals: senderEmail, mode: "insensitive" } },
     });
 
-    if (!prospect) {
-      skipped++;
-      continue;
-    }
+    if (!prospect) { skipped++; continue; }
 
-    let attachments: EmailAttachment[] = [];
-    try {
-      attachments = await getEmailAttachments(gmailId);
-    } catch (err) {
-      console.error(`[gmail-poll] attachments fetch error for ${gmailId}:`, err);
-    }
-
-    const { intent, analysis, laterDate } = await analyzeEmail(message.body, prospect.name, attachments);
+    const { intent, analysis, laterDate } = await analyzeEmail(message.body, prospect.name);
     const config = INTENT_CONFIG[intent];
 
-    // Ne jamais rétrograder un statut déjà avancé
     const newStatus = config.status && canTransition(prospect.status, config.status)
       ? config.status
       : undefined;
 
-    // Ajoute le tag à la liste existante (sans doublon)
     const existingTags: string[] = Array.isArray(prospect.aiTags) ? prospect.aiTags as string[] : [];
     const updatedTags = Array.from(new Set([...existingTags, config.tag]));
 

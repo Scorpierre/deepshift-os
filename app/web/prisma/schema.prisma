@@ -55,6 +55,7 @@ model Prospect {
   quotes    Quote[]
   invoices  Invoice[]
   projects  Project[]
+  documents ProspectDocument[]
 
   @@index([status])
   @@index([updatedAt])
@@ -94,6 +95,20 @@ model Email {
   @@index([prospectId])
   @@index([prospectId, direction])
   @@index([sentAt])
+}
+
+model ProspectDocument {
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+
+  prospectId String
+  prospect   Prospect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+
+  filename   String
+  mimeType   String
+  data       String   @db.Text // base64 standard
+
+  @@index([prospectId])
 }
 
 enum EmailDirection {
