@@ -150,6 +150,7 @@ export default function ProjectPage() {
   // IA génération
   const [generating, setGenerating] = useState(false);
   const [generatingAuto, setGeneratingAuto] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
 
   // New milestone form
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
@@ -194,13 +195,24 @@ export default function ProjectPage() {
 
   async function generateMilestones(clearExisting: boolean) {
     setGenerating(true);
-    await fetch("/api/ai/generate-milestones", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: id, clearExisting }),
-    });
-    await load();
-    setGenerating(false);
+    setGenerateError(null);
+    try {
+      const res = await fetch("/api/ai/generate-milestones", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: id, clearExisting }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setGenerateError(data.error ?? `Erreur ${res.status}`);
+      } else {
+        await load();
+      }
+    } catch {
+      setGenerateError("Erreur réseau.");
+    } finally {
+      setGenerating(false);
+    }
   }
 
   async function deleteProject() {
@@ -496,6 +508,13 @@ export default function ProjectPage() {
                 </button>
               </div>
             </div>
+
+            {/* Erreur génération */}
+            {generateError && (
+              <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+                {generateError}
+              </p>
+            )}
 
             {/* État génération auto en cours */}
             {generatingAuto && project.milestones.length === 0 && (

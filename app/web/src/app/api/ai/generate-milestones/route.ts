@@ -19,17 +19,23 @@ export async function POST(request: NextRequest) {
 
   if (!projectId) return NextResponse.json({ error: "projectId requis." }, { status: 400 });
 
-  const project = await prisma.project.findUnique({
-    where: { id: projectId },
-    include: {
-      prospect: {
-        include: {
-          emails: { orderBy: { sentAt: "desc" }, take: 15 },
-          documents: { orderBy: { createdAt: "desc" } },
+  let project;
+  try {
+    project = await prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        prospect: {
+          include: {
+            emails: { orderBy: { sentAt: "desc" }, take: 15 },
+            documents: { orderBy: { createdAt: "desc" } },
+          },
         },
       },
-    },
-  });
+    });
+  } catch (err) {
+    console.error("[generate-milestones] DB error:", err);
+    return NextResponse.json({ error: "Erreur base de données." }, { status: 500 });
+  }
 
   if (!project) return NextResponse.json({ error: "Projet introuvable." }, { status: 404 });
 
