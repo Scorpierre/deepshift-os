@@ -8,6 +8,8 @@ const PUBLIC_PATHS = [
   "/api/webhooks/gmail-poll",
   "/api/cron/daily-outreach",
   "/api/cron/process-followups",
+  "/api/cron/monthly-claude-expense",
+  "/api/cron/monthly-azure-expense",
 ];
 
 export async function proxy(req: NextRequest) {
