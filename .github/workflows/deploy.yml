@@ -33,6 +33,7 @@ jobs:
             git pull origin main
             cd app/web
             npm install
-            DATABASE_URL='postgresql://deepshift:DeepShift2026!@10.0.1.4:5432/deepshift_db' npx prisma migrate deploy
-            docker compose up --build -d
+            DATABASE_URL='${{ secrets.DATABASE_URL }}' npx prisma migrate deploy
+            docker compose build --no-cache
+            docker compose up -d
             echo "✅ Deploy done at $(date)"
