@@ -388,3 +388,17 @@ enum BillingCycle {
   MONTHLY
   ANNUAL
 }
+
+// ─── IA Usage ─────────────────────────────────────────────────────────────────
+
+model AiUsageLog {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+
+  model        String
+  inputTokens  Int
+  outputTokens Int
+  costUsd      Float
+
+  @@index([createdAt])
+}

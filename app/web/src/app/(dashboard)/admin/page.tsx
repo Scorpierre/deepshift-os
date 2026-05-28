@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   BarChart3,
+  BrainCircuit,
   Check,
   CreditCard,
   Loader2,
@@ -788,6 +789,171 @@ function ExpensesTab({
   );
 }
 
+// ─── Usage IA ─────────────────────────────────────────────────────────────────
+
+type AiUsageStats = {
+  currentMonth: { costUsd: number; inputTokens: number; outputTokens: number; callCount: number };
+  lastMonth: { costUsd: number; callCount: number };
+  allTime: { costUsd: number; callCount: number };
+  byModel: { model: string; costUsd: number; inputTokens: number; outputTokens: number; callCount: number }[];
+  last30Days: { date: string; costUsd: number }[];
+};
+
+function fmtUsd(n: number) {
+  return n.toLocaleString("fr-FR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+}
+
+function fmtTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
+  return String(n);
+}
+
+function shortModel(model: string) {
+  if (model.includes("haiku")) return "Haiku";
+  if (model.includes("sonnet")) return "Sonnet";
+  if (model.includes("opus")) return "Opus";
+  return model;
+}
+
+function AiUsageTab() {
+  const [stats, setStats] = useState<AiUsageStats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/admin/ai-usage")
+      .then((r) => r.json())
+      .then(setStats)
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 size={20} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!stats) return null;
+
+  const maxDay = Math.max(...stats.last30Days.map((d) => d.costUsd), 0.000001);
+  const maxModel = Math.max(...stats.byModel.map((m) => m.costUsd), 0.000001);
+
+  return (
+    <div className="p-6 space-y-8 max-w-3xl">
+      <div className="grid grid-cols-2 gap-4">
+        <div className="border border-violet-500/20 bg-violet-500/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <BrainCircuit size={13} className="text-violet-400" />
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              Coût ce mois
+            </span>
+          </div>
+          <p className="text-2xl font-bold text-violet-400">${fmtUsd(stats.currentMonth.costUsd)}</p>
+          <p className="text-xs text-muted-foreground">{stats.currentMonth.callCount} appels Claude</p>
+        </div>
+        <div className="border border-zinc-500/20 bg-zinc-500/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <BarChart3 size={13} className="text-zinc-400" />
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              Mois précédent
+            </span>
+          </div>
+          <p className="text-2xl font-bold text-zinc-300">${fmtUsd(stats.lastMonth.costUsd)}</p>
+          <p className="text-xs text-muted-foreground">{stats.lastMonth.callCount} appels</p>
+        </div>
+        <div className="border border-blue-500/20 bg-blue-500/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <ArrowDownCircle size={13} className="text-blue-400" />
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              Tokens ce mois
+            </span>
+          </div>
+          <p className="text-2xl font-bold text-blue-400">
+            {fmtTokens(stats.currentMonth.inputTokens + stats.currentMonth.outputTokens)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {fmtTokens(stats.currentMonth.inputTokens)} in · {fmtTokens(stats.currentMonth.outputTokens)} out
+          </p>
+        </div>
+        <div className="border border-emerald-500/20 bg-emerald-500/10 rounded-2xl p-4 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <CreditCard size={13} className="text-emerald-400" />
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              Total all-time
+            </span>
+          </div>
+          <p className="text-2xl font-bold text-emerald-400">${fmtUsd(stats.allTime.costUsd)}</p>
+          <p className="text-xs text-muted-foreground">{stats.allTime.callCount} appels au total</p>
+        </div>
+      </div>
+
+      {stats.byModel.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs text-muted-foreground uppercase tracking-wide">
+            Répartition par modèle (ce mois)
+          </h3>
+          <div className="space-y-3">
+            {stats.byModel.map((m) => (
+              <div key={m.model} className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-violet-400" />
+                    <span className="text-sm text-foreground/80">{shortModel(m.model)}</span>
+                    <span className="text-[10px] text-muted-foreground/50">{m.callCount} appels</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    ${fmtUsd(m.costUsd)}
+                  </span>
+                </div>
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-violet-400 transition-all"
+                    style={{ width: `${(m.costUsd / maxModel) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {stats.last30Days.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-xs text-muted-foreground uppercase tracking-wide">
+            Coût journalier — 30 derniers jours
+          </h3>
+          <div className="flex items-end gap-0.5 h-16">
+            {stats.last30Days.map((d) => (
+              <div
+                key={d.date}
+                className="flex-1 bg-violet-500/40 rounded-t hover:bg-violet-500/60 transition-colors relative group"
+                style={{ height: `${Math.max(2, (d.costUsd / maxDay) * 100)}%` }}
+              >
+                <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-card border border-border rounded-lg px-2 py-1 text-[10px] whitespace-nowrap z-10">
+                  {d.date} · ${fmtUsd(d.costUsd)}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground/50">
+            Dépense auto créée le 1er de chaque mois via cron n8n.
+          </p>
+        </div>
+      )}
+
+      {stats.allTime.callCount === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/40 gap-2">
+          <BrainCircuit size={32} strokeWidth={1.5} />
+          <p className="text-sm">Aucun appel Claude enregistré pour l&apos;instant.</p>
+          <p className="text-xs">Les appels futurs seront trackés automatiquement.</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Weekly Review ────────────────────────────────────────────────────────────
 
 function WeeklyReviewTab() {
@@ -862,7 +1028,7 @@ function WeeklyReviewTab() {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 
-type Tab = "overview" | "subscriptions" | "expenses" | "weekly";
+type Tab = "overview" | "subscriptions" | "expenses" | "ai" | "weekly";
 
 export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("overview");
@@ -897,6 +1063,7 @@ export default function AdminPage() {
       count: activeSubsCount,
     },
     { id: "expenses", label: "Dépenses", icon: ArrowDownCircle },
+    { id: "ai", label: "Usage IA", icon: BrainCircuit },
     { id: "weekly", label: "Weekly Review", icon: Sparkles },
   ];
 
@@ -942,7 +1109,7 @@ export default function AdminPage() {
             ))}
           </div>
 
-          {tab !== "weekly" && (
+          {tab !== "weekly" && tab !== "ai" && (
             <button
               onClick={() => setModal({})}
               className="flex items-center gap-1.5 text-sm bg-violet-500/15 text-violet-300 hover:bg-violet-500/25 border border-violet-500/20 px-3 py-1.5 rounded-lg transition-colors"
@@ -969,6 +1136,7 @@ export default function AdminPage() {
               onEdit={(e) => setModal({ expense: e })}
             />
           )}
+          {tab === "ai" && <AiUsageTab />}
           {tab === "weekly" && <WeeklyReviewTab />}
         </div>
       </div>
