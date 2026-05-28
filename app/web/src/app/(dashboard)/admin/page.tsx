@@ -14,6 +14,7 @@ import {
   Settings,
   Sparkles,
   Trash2,
+  Wallet,
   X,
 } from "lucide-react";
 
@@ -799,6 +800,18 @@ type AiUsageStats = {
   last30Days: { date: string; costUsd: number }[];
 };
 
+type AzureCredits = {
+  available: boolean;
+  source?: string;
+  currency?: string;
+  beginning?: number;
+  utilized?: number;
+  remaining?: number;
+  reason?: string;
+};
+
+const CLAUDE_BUDGET_USD = 5; // seuil mensuel Claude en $
+
 function fmtUsd(n: number) {
   return n.toLocaleString("fr-FR", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
 }
@@ -818,13 +831,17 @@ function shortModel(model: string) {
 
 function AiUsageTab() {
   const [stats, setStats] = useState<AiUsageStats | null>(null);
+  const [azure, setAzure] = useState<AzureCredits | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/admin/ai-usage")
-      .then((r) => r.json())
-      .then(setStats)
-      .finally(() => setLoading(false));
+    Promise.all([
+      fetch("/api/admin/ai-usage").then((r) => r.json()),
+      fetch("/api/admin/azure-credits").then((r) => r.json()),
+    ]).then(([usage, credits]) => {
+      setStats(usage);
+      setAzure(credits);
+    }).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -839,9 +856,80 @@ function AiUsageTab() {
 
   const maxDay = Math.max(...stats.last30Days.map((d) => d.costUsd), 0.000001);
   const maxModel = Math.max(...stats.byModel.map((m) => m.costUsd), 0.000001);
+  const claudeBudgetPct = Math.min(100, (stats.currentMonth.costUsd / CLAUDE_BUDGET_USD) * 100);
+  const claudeOver = stats.currentMonth.costUsd > CLAUDE_BUDGET_USD;
 
   return (
     <div className="p-6 space-y-8 max-w-3xl">
+
+      {/* ── Budget cards ── */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Azure credits */}
+        <div className="border border-blue-500/20 bg-blue-500/10 rounded-2xl p-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <Wallet size={13} className="text-blue-400" />
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              Crédits Azure restants
+            </span>
+          </div>
+          {azure?.available ? (
+            <>
+              <p className="text-2xl font-bold text-blue-400">
+                ${(azure.remaining ?? 0).toFixed(2)}
+                <span className="text-sm font-normal text-muted-foreground ml-1">
+                  / ${azure.beginning ?? 100}
+                </span>
+              </p>
+              <div className="space-y-1">
+                <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-blue-400 transition-all"
+                    style={{
+                      width: `${Math.max(0, ((azure.remaining ?? 0) / (azure.beginning ?? 100)) * 100)}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  ${(azure.utilized ?? 0).toFixed(2)} consommé ({azure.currency ?? "USD"})
+                </p>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground/60">
+              {azure?.reason ?? "Non disponible"}
+            </p>
+          )}
+        </div>
+
+        {/* Claude budget */}
+        <div className={`border rounded-2xl p-4 space-y-3 ${claudeOver ? "border-red-500/25 bg-red-500/10" : "border-violet-500/20 bg-violet-500/10"}`}>
+          <div className="flex items-center gap-2">
+            <BrainCircuit size={13} className={claudeOver ? "text-red-400" : "text-violet-400"} />
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
+              Budget Claude / mois
+            </span>
+          </div>
+          <p className={`text-2xl font-bold ${claudeOver ? "text-red-400" : "text-violet-400"}`}>
+            ${fmtUsd(stats.currentMonth.costUsd)}
+            <span className="text-sm font-normal text-muted-foreground ml-1">
+              / ${CLAUDE_BUDGET_USD}
+            </span>
+          </p>
+          <div className="space-y-1">
+            <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all ${claudeOver ? "bg-red-400" : "bg-violet-400"}`}
+                style={{ width: `${claudeBudgetPct}%` }}
+              />
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {claudeOver ? "⚠ Seuil dépassé" : `${(CLAUDE_BUDGET_USD - stats.currentMonth.costUsd).toFixed(4)}$ restants`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Usage cards ── */}
       <div className="grid grid-cols-2 gap-4">
         <div className="border border-violet-500/20 bg-violet-500/10 rounded-2xl p-4 space-y-1.5">
           <div className="flex items-center gap-2">
