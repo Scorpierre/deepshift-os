@@ -3,22 +3,14 @@ import { prisma } from "@/lib/prisma";
 
 const EUR_RATE = 0.92;
 
+// Uses VM Managed Identity via IMDS — no secrets needed
 async function getAzureToken(): Promise<string> {
   const res = await fetch(
-    `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}/oauth2/v2.0/token`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: process.env.AZURE_CLIENT_ID!,
-        client_secret: process.env.AZURE_CLIENT_SECRET!,
-        scope: "https://management.azure.com/.default",
-      }),
-    }
+    "http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/",
+    { headers: { Metadata: "true" } }
   );
   const data = await res.json();
-  if (!data.access_token) throw new Error(`Azure auth failed: ${JSON.stringify(data)}`);
+  if (!data.access_token) throw new Error(`IMDS token failed: ${JSON.stringify(data)}`);
   return data.access_token;
 }
 
@@ -28,7 +20,6 @@ async function queryLastMonthCost(
   const now = new Date();
   const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
   const to = new Date(now.getFullYear(), now.getMonth(), 1);
-  // to is exclusive — subtract 1ms to stay in last month
   to.setMilliseconds(-1);
 
   const res = await fetch(

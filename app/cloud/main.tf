@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.0"
     }
+    azuread = {
+      source  = "hashicorp/azuread"
+      version = "~> 2.0"
+    }
   }
 }
 
@@ -200,6 +204,10 @@ resource "azurerm_linux_virtual_machine" "vm" {
   }
 
   disable_password_authentication = true
+
+  identity {
+    type = "SystemAssigned"
+  }
 
   # Cloud-Init — installe Docker + Docker Compose + génère docker-compose.yml
   user_data = base64encode(<<-EOF
