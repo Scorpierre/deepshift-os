@@ -15,10 +15,10 @@
 | Clé SSH configurée | ✅ Fait | `id_ed25519` (clé existante) |
 | Nommage des ressources | ✅ Fait | Convention `deepshift-{type}` (rg, vm, vnet, snet, nsg, pip, nic) |
 | `.gitignore` complet | ✅ Fait | Node.js + Terraform (tfstate, tfvars, .terraform/) |
-| `terraform apply` — VM créée | ✅ Fait | IP : `20.111.38.245` |
-| Connexion SSH vérifiée | ✅ Fait | `ssh -i ~/.ssh/id_ed25519 deepshift@20.111.38.245` |
+| `terraform apply` — VM créée | ✅ Fait | IP : `<VM_PUBLIC_IP>` |
+| Connexion SSH vérifiée | ✅ Fait | `ssh -i ~/.ssh/id_ed25519 deepshift@<VM_PUBLIC_IP>` |
 | Docker installé sur la VM | ✅ Fait | Via cloud-init |
-| n8n lancé via Docker Compose | ✅ Fait | http://20.111.38.245:5678 |
+| n8n lancé via Docker Compose | ✅ Fait | http://<VM_PUBLIC_IP>:5678 |
 | PostgreSQL lancé via Docker Compose | ✅ Fait | Port 5432 — `n8n_db` créée manuellement |
 | Compte admin n8n créé | ✅ Fait | — |
 
@@ -33,7 +33,7 @@
 | CI GitHub Actions | ✅ Fait | Déclenché sur PR vers `main` ou `dev` — typecheck + lint + build |
 | Auto-deploy GitHub Actions | ✅ Fait | Push sur `main` → SSH → `npm install` + `prisma migrate deploy` + `docker compose up --build` |
 | Déclenchement manuel deploy | ✅ Fait | `workflow_dispatch` ajouté — bouton "Run workflow" dans GitHub Actions |
-| Migrations auto en deploy | ✅ Fait | `prisma migrate deploy` avec IP privée `10.0.1.4` dans le script CI |
+| Migrations auto en deploy | ✅ Fait | `prisma migrate deploy` avec IP privée `<VM_PRIVATE_IP>` dans le script CI |
 | Secrets GitHub configurés | ✅ Fait | `VM_HOST`, `VM_USER`, `SSH_PRIVATE_KEY` |
 | Protection branche `main` | ⬜ À faire | Nécessite GitHub Pro (repo privé) — à activer si passage Pro ou repo public |
 | Template PR | ✅ Fait | `.github/pull_request_template.md` |
@@ -99,14 +99,14 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 
 | Paramètre | Valeur |
 |-----------|--------|
-| IP publique | `20.111.38.245` |
-| IP privée | `10.0.1.4` |
-| DATABASE_URL | `postgresql://deepshift:...@10.0.1.4:5432/deepshift_db` |
-| N8N_WEBHOOK_PROSPECT_ANALYSIS | `http://10.0.1.4:5678/webhook/prospect-analysis` |
+| IP publique | `<VM_PUBLIC_IP>` |
+| IP privée | `<VM_PRIVATE_IP>` |
+| DATABASE_URL | `postgresql://deepshift:...@<VM_PRIVATE_IP>:5432/deepshift_db` |
+| N8N_WEBHOOK_PROSPECT_ANALYSIS | `http://<VM_PRIVATE_IP>:5678/webhook/prospect-analysis` |
 | ANTHROPIC_API_KEY | configurée directement dans le nœud n8n "Call Claude" |
-| n8n → Update Prospect | méthode `POST` vers `http://10.0.1.4:3000/api/webhooks/n8n` |
+| n8n → Update Prospect | méthode `POST` vers `http://<VM_PRIVATE_IP>:3000/api/webhooks/n8n` |
 
-> ⚠️ Toujours utiliser `10.0.1.4` (IP privée) dans les configs inter-services sur la VM — jamais `localhost`.
+> ⚠️ Toujours utiliser `<VM_PRIVATE_IP>` (IP privée) dans les configs inter-services sur la VM — jamais `localhost`.
 
 ---
 
@@ -146,7 +146,7 @@ feature/xxx  →  dev  →  main  →  VM Azure (auto-deploy)
 | ORM | Prisma 7 | ✅ (configuré — pas encore de modèles) |
 | UI | shadcn/ui + Tailwind | ✅ (initialisé) |
 | IA | Claude API | ✅ (n8n + Next.js) |
-| Automatisation | n8n self-hosted | ✅ (Docker — http://20.111.38.245:5678) |
+| Automatisation | n8n self-hosted | ✅ (Docker — http://<VM_PUBLIC_IP>:5678) |
 | Email | Gmail API | ✅ (OAuth2 configuré — envoi opérationnel) |
 | Calendrier | Google Calendar API | ⬜ |
-| Hébergement | Azure VM `deepshift-vm` — FranceCentral | ✅ (`20.111.38.245`) |
+| Hébergement | Azure VM `deepshift-vm` — FranceCentral | ✅ (`<VM_PUBLIC_IP>`) |

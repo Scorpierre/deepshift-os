@@ -21,7 +21,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://10.0.1.4:3000/api/cron/process-followups",
+        "url": "http://<VM_PRIVATE_IP>:3000/api/cron/process-followups",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [

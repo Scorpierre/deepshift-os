@@ -295,7 +295,7 @@ Reminder relance créé si nécessaire
 | VM | `Standard_D2s_v3` |
 | OS | Ubuntu 24.04 LTS |
 | CPU / RAM | 2 vCPU / 8 GB |
-| IP publique | `20.111.38.245` (statique) |
+| IP publique | `<VM_PUBLIC_IP>` (statique) |
 | Region | FranceCentral |
 | Resource group | `deepshift-rg` |
 | Provisioning | Terraform (`app/cloud/main.tf`) |
@@ -314,8 +314,8 @@ Reminder relance créé si nécessaire
 
 | Service | Démarrage | URL |
 |---------|-----------|-----|
-| Next.js app | Docker Compose | `http://20.111.38.245:3000` |
-| n8n | Docker Compose | `http://20.111.38.245:5678` |
+| Next.js app | Docker Compose | `http://<VM_PUBLIC_IP>:3000` |
+| n8n | Docker Compose | `http://<VM_PUBLIC_IP>:5678` |
 | PostgreSQL 16 | Docker Compose | port 5432 (interne) |
 
 ### 5.3 CI/CD — GitHub Actions

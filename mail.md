@@ -52,7 +52,7 @@ tout se passe dans la route API Next.js au moment de la création.
 
 ## Webhook n8n → app
 
-POST http://20.111.38.245:3000/api/webhooks/n8n
+POST http://<VM_PUBLIC_IP>:3000/api/webhooks/n8n
 Header : x-n8n-secret: deepshift-n8n-secret-2026
 Body : { prospectId, action, data }
 
@@ -78,7 +78,7 @@ Claude génère une page HTML standalone :
 - Couleurs et contenu adaptés au secteur détecté
 
 Sauvegardé dans /opt/deepshift/previews/[slug]/index.html
-Servi par Nginx sur http://20.111.38.245/previews/[slug]/
+Servi par Nginx sur http://<VM_PUBLIC_IP>/previews/[slug]/
 
 Stack : n8n, claude-haiku-4-5 pour scoring,
 claude-sonnet-4-6 pour email et maquette HTML,

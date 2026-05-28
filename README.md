@@ -2,7 +2,7 @@
 
 > A self-hosted, AI-powered business operating system — built solo to replace Notion, HubSpot, and Zapier for a French IT freelance business.
 
-**Live:** `http://20.111.38.245:3000`
+**Live:** `http://<VM_PUBLIC_IP>:3000`
 
 ---
 
@@ -97,7 +97,7 @@ feature/* → dev → main → Azure VM (auto-deploy)
 | `deploy.yml` | Push to `main` | SSH into VM → git pull → npm install → prisma migrate deploy → docker compose up |
 | `reset-db.yml` | Manual | Drop + recreate database |
 
-Migrations run automatically on every deploy against the private VM IP (`10.0.1.4`), keeping schema and code in sync without manual intervention.
+Migrations run automatically on every deploy against the private VM IP (`<VM_PRIVATE_IP>`), keeping schema and code in sync without manual intervention.
 
 ---
 

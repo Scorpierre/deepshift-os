@@ -57,8 +57,8 @@ Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entrepr
 - **Cloud** : Microsoft Azure — crédits 100$ pour 1 an
 - **VM** : `Standard_D2s_v3` — Ubuntu 24.04 LTS — 2 vCPU / 8GB RAM
   - ⚠️ B2ms voulu initialement mais indisponible en FranceCentral
-- **IP publique** : `20.111.38.245` (statique)
-- **SSH** : `ssh -i ~/.ssh/id_ed25519 deepshift@20.111.38.245`
+- **IP publique** : `<VM_PUBLIC_IP>` (statique)
+- **SSH** : `ssh -i ~/.ssh/id_ed25519 deepshift@<VM_PUBLIC_IP>`
 - **Resource group** : `deepshift-rg`
 - **Nom VM** : `deepshift-vm`
 - **Username SSH** : `deepshift`
@@ -74,15 +74,15 @@ az vm deallocate --resource-group deepshift-rg --name deepshift-vm
 az vm start --resource-group deepshift-rg --name deepshift-vm
 
 # SSH
-ssh -i ~/.ssh/id_ed25519 deepshift@20.111.38.245
+ssh -i ~/.ssh/id_ed25519 deepshift@<VM_PUBLIC_IP>
 ```
 
 ### Services actifs sur la VM
 | Service | URL | Statut |
 |---------|-----|--------|
-| n8n | http://20.111.38.245:5678 | ✅ UP |
+| n8n | http://<VM_PUBLIC_IP>:5678 | ✅ UP |
 | PostgreSQL | port 5432 (interne) | ✅ UP |
-| Next.js | http://20.111.38.245:3000 | ⬜ pas encore déployé |
+| Next.js | http://<VM_PUBLIC_IP>:3000 | ⬜ pas encore déployé |
 
 ---
 
