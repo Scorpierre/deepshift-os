@@ -1,0 +1,54 @@
+{
+  "name": "1er du mois — dépense Claude API",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "1 0 1 * *"
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "1er du mois 00h01",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://<VM_PRIVATE_IP>:3000/api/cron/monthly-claude-expense",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-n8n-secret",
+              "value": "deepshift-n8n-secret-2026"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "monthly-claude-expense",
+      "name": "Créer dépense Claude",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    }
+  ],
+  "connections": {
+    "1er du mois 00h01": {
+      "main": [
+        [{ "node": "Créer dépense Claude", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
