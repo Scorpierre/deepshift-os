@@ -10,6 +10,8 @@ const PUBLIC_PATHS = [
   "/api/cron/process-followups",
   "/api/cron/monthly-claude-expense",
   "/api/cron/monthly-azure-expense",
+  "/api/cron/payment-reminders",
+  "/api/ai/weekly-summary",
 ];
 
 export async function proxy(req: NextRequest) {
