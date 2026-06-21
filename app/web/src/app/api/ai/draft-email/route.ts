@@ -42,7 +42,7 @@ ${prospect.companyDescription}
     messages: [
       {
         role: "user",
-        content: `Tu es Pierre Connes, auto-entrepreneur IT (DeepShift — web apps sur mesure, outils de gestion et d'automatisation). Rédige un email de prospection froide en respectant EXACTEMENT la structure ci-dessous.
+        content: `Tu es Pierre Connes, auto-entrepreneur IT (DeepShift — web apps sur mesure, outils de gestion et d'automatisation). Tu vas rédiger un email de prospection froide.
 
 Prospect :
 - Nom : ${prospect.name}
@@ -54,25 +54,33 @@ ${prospectContext}
 ${facebookHint}
 
 ---
-STRUCTURE OBLIGATOIRE (4 blocs, rien d'autre) :
+ÉTAPE 1 — ANALYSE INTERNE (ne pas écrire dans l'email, juste raisonner) :
+
+Avant de rédiger, pose-toi ces questions sur cette structure spécifique :
+- Qu'est-ce que cette organisation gère au quotidien en interne ? (stocks, plannings, fiches, suivis, registres...)
+- Quelles sont les tâches répétitives propres à CE métier précis ? (pas au secteur en général)
+- Quels outils utilisent-ils probablement aujourd'hui pour ces tâches ? (Excel, cahiers, logiciels métier génériques...)
+- Où est la friction la plus évidente pour eux ?
+
+Exemple pour un aquarium : suivi de la santé et de l'alimentation de chaque animal, inventaire des espèces et renouvellement du stock, registre des soins vétérinaires, plannings de nourrissage par bassin, maintenance des installations techniques.
+NE PAS parler de "réservations de groupes" ou "gestion d'événements" sauf si c'est vraiment le cœur de leur activité.
+
+---
+ÉTAPE 2 — RÉDACTION (structure obligatoire, 4 blocs) :
 
 1. SALUTATION
    "Bonjour,"
-   (Pas de prénom — email froid, on ne sait pas à qui exactement on s'adresse dans la structure)
 
-2. ACCROCHE (1 phrase)
+2. ACCROCHE (1 phrase — FIXE, ne pas modifier)
    "Je me permets de vous contacter car je travaille sur des outils simples de gestion et d'automatisation pour des structures comme la vôtre."
-   Cette phrase est FIXE, ne pas la modifier.
 
-3. PROBLÈME SECTORIEL (2-3 phrases max)
-   Identifie les problèmes opérationnels typiques des structures de CE SECTEUR — pas leur site web, pas leur présence en ligne.
-   Pense : Excel partout, plusieurs outils séparés, tâches manuelles répétitives, suivi interne chronophage, reporting manuel, plannings gérés à la main, etc.
-   Formule depuis leur point de vue ("beaucoup d'organisations de ce type...", "ce type de structure...").
-   Reste concret et sectoriel — montre que tu connais leur métier, pas leur site.
+3. PROBLÈME SPÉCIFIQUE (2-3 phrases max)
+   Basé sur ton analyse de l'étape 1 : cite 1-2 tâches internes concrètes et spécifiques à CE type de structure, pas des généralités.
+   Formule depuis leur point de vue ("beaucoup de structures comme la vôtre...", "ce type de gestion...").
+   Interdit : "réservations", "suivi d'événements", "reporting", "planning de groupes" — sauf si ça colle vraiment à leur activité principale.
 
-4. CTA (1 question ouverte sur leur situation)
+4. CTA (1 question — FIXE, ne pas modifier)
    "Est-ce que c'est quelque chose que vous rencontrez aussi dans votre fonctionnement actuel ?"
-   Cette phrase est FIXE, ne pas la modifier.
 
 5. SIGNATURE
    "Bien cordialement,\\nPierre — DeepShift"
@@ -81,14 +89,13 @@ Règles de style :
 - Ton professionnel, sobre, entre deux pros
 - Pas de "J'espère que", pas de superlatifs, pas de jargon marketing
 - Pas de liste à puces dans l'email
-- Pas de mention du site web ou de leur présence en ligne dans le corps du mail
 - Phrases courtes
 
 Réponds UNIQUEMENT en JSON valide :
 {
   "subject": "Objet court (6-8 mots max, sobre, pas de majuscules inutiles)",
   "body": "Corps complet de l'email en respectant la structure",
-  "insights": ["problème sectoriel identifié 1", "problème sectoriel identifié 2"]
+  "insights": ["tâche interne spécifique identifiée 1", "tâche interne spécifique identifiée 2"]
 }`,
       },
     ],
