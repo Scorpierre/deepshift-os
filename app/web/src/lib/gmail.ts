@@ -122,10 +122,22 @@ export async function listUnreadEmailIds(): Promise<string[]> {
   return (data.messages ?? []).map((m: { id: string }) => m.id);
 }
 
+/** Retourne les gmailIds des emails envoyés dans les 2 derniers jours */
+export async function listSentEmailIds(): Promise<string[]> {
+  const accessToken = await getAccessToken();
+  const res = await fetch(
+    `https://gmail.googleapis.com/gmail/v1/users/me/messages?q=in:sent+newer_than:2d&maxResults=${GMAIL_MAX_RESULTS}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const data = await res.json();
+  return (data.messages ?? []).map((m: { id: string }) => m.id);
+}
+
 /** Récupère le contenu complet d'un message Gmail */
 export async function getEmailMessage(gmailId: string): Promise<{
   gmailId: string;
   from: string;
+  to: string;
   subject: string;
   body: string;
 }> {
@@ -137,9 +149,10 @@ export async function getEmailMessage(gmailId: string): Promise<{
   const data = await res.json();
   const headers = (data.payload?.headers ?? []) as { name: string; value: string }[];
   const from = headers.find((h) => h.name === "From")?.value ?? "";
+  const to = headers.find((h) => h.name === "To")?.value ?? "";
   const subject = headers.find((h) => h.name === "Subject")?.value ?? "";
   const body = extractBody(data.payload ?? {});
-  return { gmailId, from, subject, body };
+  return { gmailId, from, to, subject, body };
 }
 
 export type EmailAttachment = {

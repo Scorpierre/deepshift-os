@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
-import { listUnreadEmailIds, getEmailMessage, extractEmailAddress } from "@/lib/gmail";
+import { listUnreadEmailIds, listSentEmailIds, getEmailMessage, extractEmailAddress } from "@/lib/gmail";
 import { parseAiJson } from "@/lib/parse-ai-json";
 import { MODEL_HAIKU } from "@/config";
 import { updateCalendarEvent, deleteCalendarEvent } from "@/lib/google-calendar";
@@ -240,6 +240,52 @@ export async function POST(request: NextRequest) {
     }
 
     processed++;
+  }
+
+  // --- Scan des emails ENVOYÉS directement depuis Gmail (hors CRM) ---
+  const sentIds = await listSentEmailIds();
+  const existingSent = await prisma.email.findMany({
+    where: { gmailId: { in: sentIds } },
+    select: { gmailId: true },
+  });
+  const existingSentIds = new Set(existingSent.map((e) => e.gmailId));
+  const sentToProcess = sentIds.filter((id) => !existingSentIds.has(id));
+
+  if (sentToProcess.length > 0) {
+    const sentMessages = await Promise.all(sentToProcess.map(getEmailMessage));
+    const recipientEmails = sentMessages.map((m) => extractEmailAddress(m.to));
+    const matchingRecipients = await prisma.prospect.findMany({
+      where: {
+        OR: recipientEmails.map((e) => ({ email: { equals: e, mode: "insensitive" as const } })),
+      },
+    });
+    const prospectByRecipient = new Map(matchingRecipients.map((p) => [p.email.toLowerCase(), p]));
+
+    for (let i = 0; i < sentToProcess.length; i++) {
+      const gmailId = sentToProcess[i];
+      const message = sentMessages[i];
+      const recipientEmail = extractEmailAddress(message.to);
+      const prospect = prospectByRecipient.get(recipientEmail.toLowerCase());
+      if (!prospect) continue;
+
+      await prisma.email.create({
+        data: {
+          prospectId: prospect.id,
+          direction: "SENT",
+          subject: message.subject,
+          body: message.body,
+          sentAt: new Date(),
+          gmailId,
+        },
+      });
+
+      await prisma.prospect.update({
+        where: { id: prospect.id },
+        data: { lastContactedAt: new Date() },
+      });
+
+      processed++;
+    }
   }
 
   return NextResponse.json({ processed, skipped });
