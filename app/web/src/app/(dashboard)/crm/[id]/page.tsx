@@ -415,6 +415,7 @@ function EmailModal({
   const [copied, setCopied] = useState(false);
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
+  const [dayWarning, setDayWarning] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/ai/draft-email", {
@@ -434,15 +435,20 @@ function EmailModal({
     setTimeout(() => setCopied(false), 2000);
   }
 
-  async function send() {
+  async function send(force = false) {
     if (!draft) return;
     setSending(true);
+    setDayWarning(null);
     try {
       const res = await fetch(`/api/prospects/${prospectId}/emails/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: draft.subject, body: draft.body }),
+        body: JSON.stringify({ subject: draft.subject, body: draft.body, force }),
       });
+      if (res.status === 422) {
+        const data = await res.json().catch(() => ({}));
+        if (data.warning) { setDayWarning(data.warning); return; }
+      }
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
         alert((err as { error?: string }).error ?? "Erreur lors de l'envoi.");
@@ -479,14 +485,28 @@ function EmailModal({
                 >
                   {copied ? "Copié !" : "Copier"}
                 </button>
-                <button
-                  onClick={send}
-                  disabled={sending}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-                >
-                  {sending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                  {sending ? "Envoi…" : "Envoyer"}
-                </button>
+                {dayWarning ? (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-amber-400">{dayWarning}</span>
+                    <button
+                      onClick={() => send(true)}
+                      disabled={sending}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 disabled:opacity-50 transition-colors flex items-center gap-1.5 shrink-0"
+                    >
+                      {sending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                      Envoyer quand même
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => send()}
+                    disabled={sending}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 disabled:opacity-50 transition-colors flex items-center gap-1.5"
+                  >
+                    {sending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
+                    {sending ? "Envoi…" : "Envoyer"}
+                  </button>
+                )}
               </>
             )}
             {sent && (

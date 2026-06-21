@@ -6,13 +6,14 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function POST(request: NextRequest, { params }: Params) {
   const { id } = await params;
-  const { subject, body } = await request.json();
+  const { subject, body, force } = await request.json();
 
-  // Bloquer l'envoi le lundi (1) et vendredi (5) — jours défavorables en prospection B2B
+  // Avertir (pas bloquer) si jour défavorable en prospection B2B
   const day = new Date().getDay();
-  if (day === 0 || day === 1 || day === 5 || day === 6) {
+  const badDay = day === 0 || day === 1 || day === 5 || day === 6;
+  if (badDay && !force) {
     return NextResponse.json(
-      { error: "Envoi déconseillé ce jour — préfère mardi, mercredi ou jeudi pour maximiser les réponses." },
+      { warning: "Envoi déconseillé ce jour — préfère mardi, mercredi ou jeudi pour maximiser les réponses." },
       { status: 422 }
     );
   }
