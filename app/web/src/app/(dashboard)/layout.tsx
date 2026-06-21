@@ -9,11 +9,13 @@ import {
   Settings2,
   CalendarDays,
   LayoutDashboard,
+  Building2,
 } from "lucide-react";
 
 const nav = [
   { slug: "/", label: "Accueil", icon: LayoutDashboard },
   { slug: "/crm", label: "CRM", icon: Users },
+  { slug: "/clients", label: "Clients", icon: Building2 },
   { slug: "/projets", label: "Projets", icon: KanbanSquare },
   { slug: "/finance", label: "Finance", icon: BarChart3 },
   { slug: "/admin", label: "Admin", icon: Settings2 },

@@ -273,6 +273,7 @@ enum ProjectStatus {
   REVIEW
   DELIVERED
   COMPLETED
+  MAINTENANCE
   ON_HOLD
 }
 

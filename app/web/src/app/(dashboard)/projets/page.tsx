@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle, Calendar, CheckCircle2, Circle,
+  AlertTriangle, Calendar, CheckCircle2, Circle, ExternalLink,
   Loader2, Plus, Timer, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProjectStatus = "BRIEF" | "IN_PROGRESS" | "REVIEW" | "DELIVERED" | "COMPLETED" | "ON_HOLD";
+type ProjectStatus = "BRIEF" | "IN_PROGRESS" | "REVIEW" | "DELIVERED" | "COMPLETED" | "MAINTENANCE" | "ON_HOLD";
 
 type Task = { id: string; done: boolean };
 type Milestone = { id: string; tasks: Task[] };
@@ -36,7 +36,7 @@ type NewProjectForm = {
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   BRIEF: "Brief", IN_PROGRESS: "En cours", REVIEW: "Révision",
-  DELIVERED: "Livré", COMPLETED: "Terminé", ON_HOLD: "En pause",
+  DELIVERED: "Livré", COMPLETED: "Terminé", MAINTENANCE: "Maintenance", ON_HOLD: "En pause",
 };
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   BRIEF: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
@@ -44,6 +44,7 @@ const STATUS_COLORS: Record<ProjectStatus, string> = {
   REVIEW: "bg-amber-500/20 text-amber-300 border-amber-500/30",
   DELIVERED: "bg-teal-500/20 text-teal-300 border-teal-500/30",
   COMPLETED: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  MAINTENANCE: "bg-violet-500/20 text-violet-300 border-violet-500/30",
   ON_HOLD: "bg-zinc-500/20 text-zinc-500 border-zinc-500/20",
 };
 
@@ -238,31 +239,32 @@ export default function ProjetsPage() {
                 const overdue = isOverdue(project.deadline) && !["DELIVERED", "COMPLETED"].includes(project.status);
 
                 return (
-                  <button
+                  <div
                     key={project.id}
-                    onClick={() => router.push(`/projets/${project.id}`)}
-                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-muted/20 transition-colors text-left"
+                    className="flex items-center gap-4 px-5 py-4 hover:bg-muted/20 transition-colors"
                   >
                     {/* Status icon */}
                     <div className="shrink-0">
                       {project.status === "COMPLETED"
                         ? <CheckCircle2 size={18} className="text-emerald-400" />
+                        : project.status === "MAINTENANCE"
+                        ? <CheckCircle2 size={18} className="text-violet-400" />
                         : project.status === "ON_HOLD"
                         ? <Circle size={18} className="text-zinc-500" />
                         : <Circle size={18} className="text-violet-400" />}
                     </div>
 
-                    {/* Main info */}
-                    <div className="flex-1 min-w-0 space-y-1.5">
+                    {/* Main info — clic → projet */}
+                    <button
+                      onClick={() => router.push(`/projets/${project.id}`)}
+                      className="flex-1 min-w-0 space-y-1.5 text-left"
+                    >
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium truncate">{project.name}</span>
                         <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0 ${STATUS_COLORS[project.status]}`}>
                           {STATUS_LABELS[project.status]}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {project.prospect.name}{project.prospect.company ? ` — ${project.prospect.company}` : ""}
-                      </p>
                       {pct !== null && (
                         <div className="flex items-center gap-2">
                           <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden max-w-48">
@@ -274,7 +276,16 @@ export default function ProjetsPage() {
                           <span className="text-[10px] text-muted-foreground shrink-0">{pct}%</span>
                         </div>
                       )}
-                    </div>
+                    </button>
+
+                    {/* Bouton fiche client */}
+                    <button
+                      onClick={() => router.push(`/crm/${project.prospect.id}`)}
+                      className="shrink-0 flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground hover:bg-muted px-2.5 py-1.5 rounded-lg transition-colors"
+                    >
+                      <ExternalLink size={11} />
+                      {project.prospect.name}
+                    </button>
 
                     {/* Right side */}
                     <div className="shrink-0 text-right space-y-1">
@@ -290,7 +301,7 @@ export default function ProjetsPage() {
                         </p>
                       )}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>

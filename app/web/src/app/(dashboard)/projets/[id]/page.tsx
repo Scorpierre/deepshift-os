@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft, Calendar, Check, ChevronDown, Loader2,
+  ArrowLeft, Calendar, Check, ChevronDown, ExternalLink, Loader2,
   MessageSquare, Package, Plus, RefreshCw, Sparkles, Trash2, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type ProjectStatus = "BRIEF" | "IN_PROGRESS" | "REVIEW" | "DELIVERED" | "COMPLETED" | "ON_HOLD";
+type ProjectStatus = "BRIEF" | "IN_PROGRESS" | "REVIEW" | "DELIVERED" | "COMPLETED" | "MAINTENANCE" | "ON_HOLD";
 type MilestoneStatus = "PENDING" | "IN_PROGRESS" | "DONE";
 type ClientNoteType = "MEETING" | "FEEDBACK" | "DECISION" | "OTHER";
 
@@ -37,7 +37,7 @@ type Project = {
 
 const STATUS_LABELS: Record<ProjectStatus, string> = {
   BRIEF: "Brief", IN_PROGRESS: "En cours", REVIEW: "Révision",
-  DELIVERED: "Livré", COMPLETED: "Terminé", ON_HOLD: "En pause",
+  DELIVERED: "Livré", COMPLETED: "Terminé", MAINTENANCE: "Maintenance", ON_HOLD: "En pause",
 };
 const STATUS_COLORS: Record<ProjectStatus, string> = {
   BRIEF: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
@@ -45,6 +45,7 @@ const STATUS_COLORS: Record<ProjectStatus, string> = {
   REVIEW: "bg-amber-500/20 text-amber-300 border-amber-500/30",
   DELIVERED: "bg-teal-500/20 text-teal-300 border-teal-500/30",
   COMPLETED: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+  MAINTENANCE: "bg-violet-500/20 text-violet-300 border-violet-500/30",
   ON_HOLD: "bg-zinc-500/20 text-zinc-500 border-zinc-500/20",
 };
 const MILESTONE_COLORS: Record<MilestoneStatus, string> = {
@@ -332,9 +333,13 @@ export default function ProjectPage() {
 
         <div className="flex-1 min-w-0">
           <h1 className="font-semibold text-sm truncate">{project.name}</h1>
-          <p className="text-xs text-muted-foreground truncate">
+          <button
+            onClick={() => router.push(`/crm/${project.prospect.id}`)}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+          >
             {project.prospect.name}{project.prospect.company ? ` — ${project.prospect.company}` : ""}
-          </p>
+            <ExternalLink size={9} className="shrink-0 opacity-50" />
+          </button>
         </div>
 
         {pct !== null && (
