@@ -71,32 +71,32 @@ NE PAS parler de "réservations de groupes" ou "gestion d'événements" sauf si 
 1. SALUTATION
    "Bonjour,"
 
-2. ACCROCHE (1 phrase — FIXE, ne pas modifier)
-   "Je me permets de vous contacter car je travaille sur des outils simples de gestion et d'automatisation pour des structures comme la vôtre."
+2. ACCROCHE (1 phrase)
+   "Je me permets de vous contacter car je travaille sur des outils simples de gestion pour des structures comme [type de structure précis]."
+   Le type de structure doit être nommé précisément d'après leur activité (ex: "les aquariums", "les cabinets vétérinaires", "les associations culturelles") — jamais "comme la vôtre" ou générique.
 
-3. SOLUTIONS CONCRÈTES (2 phrases max)
-   Basé sur ton analyse de l'étape 1 : propose 1 ou 2 outils concrets que tu pourrais développer sur mesure pour CE type de structure.
-   Formule en termes de solutions, pas de problèmes. Pas de description de leur galère, pas de "vous gérez probablement X sur Excel".
-   Exemple de formulation : "Je développe par exemple des outils de gestion des stocks ou de suivi individuel des animaux, adaptés au fonctionnement d'une structure comme la vôtre."
-   Interdit absolu : tirets (—), "souvent", "beaucoup de structures", "charge", "chronophage", listes à puces, énumération de problèmes.
+3. OBSERVATION (1-2 phrases)
+   "Dans ce type d'environnement, le suivi des informations ([liste courte de 3-4 éléments spécifiques à leur métier]) est souvent réparti entre plusieurs supports, ce qui peut rendre la centralisation et le suivi quotidien assez complexes."
+   Les éléments entre parenthèses doivent être propres à leur activité réelle, tirés de l'analyse de l'étape 1. Pas de généralités.
 
-4. CTA (1 question — FIXE, ne pas modifier)
-   "Est-ce que c'est quelque chose qui pourrait vous être utile ?"
+4. CTA (1 question de découverte — FIXE, ne pas modifier)
+   "Est-ce que vous utilisez aujourd'hui un outil centralisé pour ce suivi, ou plutôt plusieurs supports (Excel, cahiers, logiciels séparés) ?"
 
 5. SIGNATURE
    "Bien cordialement,\nPierre — DeepShift"
 
 Règles de style :
-- Ton professionnel, sobre, entre deux pros
+- Ton sobre et direct, entre deux pros
+- Pas de pitch, pas de vente, pas de solution proposée — juste ouvrir une discussion
 - Pas de "J'espère que", pas de superlatifs, pas de jargon marketing
-- Pas de liste à puces, pas de tirets dans le corps de l'email
-- Phrases courtes et directes
+- Pas de liste à puces dans le corps du mail
+- Phrases courtes
 
 Réponds UNIQUEMENT en JSON valide :
 {
-  "subject": "Objet court (6-8 mots max, sobre, pas de majuscules inutiles)",
+  "subject": "Objet court (6-8 mots max, sobre)",
   "body": "Corps complet de l'email en respectant la structure",
-  "insights": ["solution identifiée 1", "solution identifiée 2"]
+  "insights": ["élément métier spécifique identifié 1", "élément métier spécifique identifié 2"]
 }`,
       },
     ],
