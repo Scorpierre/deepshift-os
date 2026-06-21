@@ -12,6 +12,13 @@ export async function POST(request: NextRequest) {
 
   const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
   const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
+  const hasNoWebsite = !prospect.websiteUrl || isFacebook;
+  const needsWebsite = hasNoWebsite || prospect.needType.includes("site") || prospect.needType.includes("ecommerce");
+  const needsApp = prospect.needType.some((n) => ["webapp", "api", "consulting", "autre"].includes(n));
+
+  // Si pas de site ou besoin explicite de site → angle présence web
+  // Si besoin d'outil/app ou présence web connue → angle gestion/automatisation
+  const angle: "web" | "gestion" = needsWebsite && !needsApp ? "web" : "gestion";
 
   const companyContext = prospect.aiSummary
     ? `Analyse commerciale du prospect :\n---\n${prospect.aiSummary}\n---`
@@ -23,30 +30,43 @@ export async function POST(request: NextRequest) {
     companyContext,
     prospect.prospectNotes ? `Notes internes :\n${prospect.prospectNotes}` : "",
     context ? `Contexte additionnel : ${context}` : "",
-    isFacebook ? `Note : seule présence en ligne = page Facebook (pas de site).` : "",
   ].filter(Boolean).join("\n\n");
 
-  const message = await anthropic.messages.create({
-    model: MODEL_SONNET,
-    max_tokens: 1000,
-    messages: [
-      {
-        role: "user",
-        content: `Tu es Pierre Connes (DeepShift), auto-entrepreneur IT spécialisé en outils de gestion sur mesure. Tu rédiges un email de prospection froide B2B.
+  const emailInstructions = angle === "web"
+    ? `
+CONTEXTE : cette structure n'a pas de site web (ou seulement une page Facebook). Ne pas le mentionner comme une critique — formuler à partir de ce que ça leur fait perdre concrètement.
 
-Prospect :
-- Entreprise : ${prospect.company ?? "inconnue"}
-- Secteur / besoin : ${prospect.needType.join(", ") || "non précisé"}
-- Source : ${prospect.source ?? "inconnue"}
+ÉTAPE 1 — ANALYSE :
+Pour CE type de structure, identifie ce qu'un client cherche en ligne avant de les contacter ou de se déplacer (horaires, menu, services, tarifs, localisation...) et ce qu'il ne trouve pas sans site.
 
-${prospectContext}
+ÉTAPE 2 — EMAIL :
 
----
-ÉTAPE 1 — ANALYSE (ne pas écrire dans l'email) :
-Pour CE type de structure, identifie 2-3 éléments de suivi ou de gestion qui sont probablement éparpillés entre plusieurs fichiers ou cahiers au quotidien. Ne prétends pas les connaître avec certitude — tu vas le formuler comme une hypothèse à vérifier.
+Salutation : "Bonjour,"
 
----
-ÉTAPE 2 — EMAIL (structure obligatoire) :
+Phrase 1 — situation concrète :
+"Je conçois des sites web simples pour des [type de structure nommé précisément] qui veulent être trouvés facilement en ligne."
+
+Phrase 2 — hypothèse à vérifier :
+"De ce que je comprends, quelqu'un qui vous cherche sur Google aujourd'hui trouve surtout votre page Facebook — mais pas toujours vos horaires, votre carte ou comment vous réserver. Mais je préfère le vérifier directement avec vous."
+
+Question (FIXE) :
+"Est-ce que ça correspond à votre situation, ou vous avez déjà quelque chose en place ?"
+
+Signature (FIXE) :
+"Bien cordialement,
+
+Pierre Connes
+DeepShift
+
+Vous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
+`
+    : `
+CONTEXTE : cette structure gère probablement des données de suivi complexes au quotidien et pourrait bénéficier d'un outil centralisé sur mesure.
+
+ÉTAPE 1 — ANALYSE :
+Pour CE type de structure précis, identifie 2-3 éléments de suivi ou de gestion qui sont probablement éparpillés entre plusieurs fichiers ou cahiers au quotidien. Formule-les comme une hypothèse à vérifier, pas comme une certitude.
+
+ÉTAPE 2 — EMAIL :
 
 Salutation : "Bonjour,"
 
@@ -56,7 +76,7 @@ Phrase 1 — positionnement honnête :
 Phrase 2 — hypothèse à vérifier :
 "De ce que je comprends, [2-3 éléments de gestion spécifiques à leur métier] sont souvent répartis entre plusieurs fichiers et cahiers — mais je préfère le vérifier avec des gens du métier plutôt que de le supposer."
 
-Question (FIXE, ne pas modifier) :
+Question (FIXE) :
 "Est-ce que ça correspond à votre réalité, ou je me trompe ? Je serais curieux de savoir comment vous gérez ça aujourd'hui."
 
 Signature (FIXE) :
@@ -66,8 +86,25 @@ Pierre Connes
 DeepShift
 
 Vous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
+`;
 
-Règles de style :
+  const message = await anthropic.messages.create({
+    model: MODEL_SONNET,
+    max_tokens: 1000,
+    messages: [
+      {
+        role: "user",
+        content: `Tu es Pierre Connes (DeepShift), auto-entrepreneur IT. Tu rédiges un email de prospection froide B2B.
+
+Prospect :
+- Entreprise : ${prospect.company ?? "inconnue"}
+- Secteur / besoin : ${prospect.needType.join(", ") || "non précisé"}
+
+${prospectContext}
+
+${emailInstructions}
+
+Règles de style communes :
 - 70 à 100 mots pour le corps
 - Ton sobre, direct, curieux — pas de pitch, pas de vente
 - Vouvoiement
@@ -78,7 +115,7 @@ Réponds UNIQUEMENT en JSON valide :
 {
   "subject": "Objet concret et non-commercial (6-8 mots, pas de majuscules inutiles)",
   "body": "Corps complet de l'email",
-  "insights": ["hypothèse terrain 1", "hypothèse terrain 2"]
+  "insights": ["observation clé 1", "observation clé 2"]
 }`,
       },
     ],
@@ -87,5 +124,5 @@ Réponds UNIQUEMENT en JSON valide :
   const raw = message.content[0].type === "text" ? message.content[0].text : "";
   const parsed = parseAiJson<{ subject?: string; body?: string; insights?: string[] }>(raw, "draft-email") ?? {};
 
-  return NextResponse.json({ ...parsed, scraped: !!prospect.aiSummary });
+  return NextResponse.json({ ...parsed, scraped: !!prospect.aiSummary, angle });
 }
