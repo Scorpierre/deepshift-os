@@ -19,30 +19,24 @@ export async function analyzeProspect(prospectId: string) {
     max_tokens: 800,
     messages: [{
       role: "user",
-      content: `Tu es un expert en développement commercial pour DeepShift (web apps sur mesure, consulting digital pour PME/TPE/indépendants — fondateur : Pierre Connes).
+      content: `Tu analyses un prospect pour Pierre Connes (DeepShift) — développeur freelance solo qui crée des petits outils web sur mesure : formulaires intelligents, tableaux de bord internes, automatisations simples, sites vitrines. Pas de grosses plateformes, pas de CRM complexes, pas d'apps mobiles natives.
 
-Analyse la ${sourceLabel} de ce prospect et génère une note commerciale synthétique.
-
-Infos renseignées sur le prospect :
+Prospect :
 - Entreprise : ${prospect.company ?? prospect.name}
 - Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
-- Budget estimé : ${prospect.estimatedBudget ? `${prospect.estimatedBudget} €` : "inconnu"}
-- Source : ${prospect.source ?? "inconnue"}
 ${prospect.companyDescription ? `- Contexte : ${prospect.companyDescription}` : ""}
-${prospect.score ? `- Score potentiel : ${prospect.score}/10` : ""}
 
 Contenu de leur ${sourceLabel} :
 ---
 ${pageContent.slice(0, 3000)}
 ---
 
-Génère une note commerciale. Réponds UNIQUEMENT en JSON :
+Génère une note terrain courte. Réponds UNIQUEMENT en JSON :
 {
-  "company_summary": "2-3 phrases : secteur d'activité, taille estimée, ce que fait l'entreprise",
-  "commercial_note": "3-4 phrases : potentiel pour DeepShift, besoins digitaux détectés sur le site, points d'accroche spécifiques à mentionner dans l'approche commerciale",
-  "opportunities": ["opportunité concrète 1", "opportunité concrète 2"],
-  "digital_maturity": "faible | moyenne | élevée",
-  "detected_sector": "secteur détecté"
+  "company_summary": "2 phrases max : ce que fait cette structure, sa taille estimée, son contexte",
+  "internal_pain": "1-2 phrases : quelle tâche interne répétitive ou quel suivi manuel cette structure gère probablement encore à la main ? Reste dans le scope d'un outil simple (formulaire, tableau de bord, automatisation légère). Pas de CRM, pas d'app mobile, pas de billetterie complexe.",
+  "website_gap": "1 phrase : ce qui manque ou dysfonctionne sur leur site, ou null si le site est correct",
+  "detected_sector": "secteur précis (ex: aquarium, cabinet vétérinaire, association sportive)"
 }`,
     }],
   });
@@ -51,27 +45,19 @@ Génère une note commerciale. Réponds UNIQUEMENT en JSON :
   const match = raw.match(/\{[\s\S]*\}/);
   let parsed: {
     company_summary?: string;
-    commercial_note?: string;
-    opportunities?: string[];
-    digital_maturity?: string;
+    internal_pain?: string;
+    website_gap?: string;
     detected_sector?: string;
   } = {};
   try { parsed = JSON.parse(match?.[0] ?? "{}"); } catch { /* ignore */ }
 
-  if (!parsed.company_summary && !parsed.commercial_note) return;
+  if (!parsed.company_summary) return;
 
   const summaryText = [
     parsed.company_summary,
-    parsed.commercial_note ? `\n${parsed.commercial_note}` : null,
-    parsed.opportunities?.length
-      ? `\nOpportunités : ${parsed.opportunities.join(" · ")}`
-      : null,
-    parsed.digital_maturity
-      ? `Maturité digitale : ${parsed.digital_maturity}`
-      : null,
-    parsed.detected_sector
-      ? `Secteur : ${parsed.detected_sector}`
-      : null,
+    parsed.internal_pain ? `\nGestion interne : ${parsed.internal_pain}` : null,
+    parsed.website_gap && parsed.website_gap !== "null" ? `\nSite web : ${parsed.website_gap}` : null,
+    parsed.detected_sector ? `\nSecteur : ${parsed.detected_sector}` : null,
   ].filter(Boolean).join("\n");
 
   await prisma.prospect.update({
