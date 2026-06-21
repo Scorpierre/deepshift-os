@@ -60,7 +60,7 @@ Corps (2-3 phrases) :
 - Pas de tirets, pas de listes, pas de superlatifs
 
 Positionnement (1 phrase) :
-"Je conçois des outils simples pour centraliser tout ça pour les [type de structure nommé précisément], sans usine à gaz."
+"Je conçois des outils simples pour centraliser tout ça pour les [type de structure nommé précisément]."
 
 Question (FIXE, ne pas modifier) :
 "Question rapide : aujourd'hui, vous gérez ça plutôt sur un outil centralisé, ou sur plusieurs supports ?"
