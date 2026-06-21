@@ -10,89 +10,80 @@ export async function POST(request: NextRequest) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
   if (!prospect) return NextResponse.json({ error: "Prospect not found" }, { status: 404 });
 
-  // Réutilise l'analyse déjà effectuée à la création du prospect (évite un double scraping + appel Claude)
   const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
   const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
 
   const companyContext = prospect.aiSummary
-    ? `Analyse commerciale du prospect (déjà effectuée) :
----
-${prospect.aiSummary}
----`
+    ? `Analyse commerciale du prospect :\n---\n${prospect.aiSummary}\n---`
     : prospect.companyDescription
-    ? `Description de l'entreprise :
----
-${prospect.companyDescription}
----`
+    ? `Description de l'entreprise :\n---\n${prospect.companyDescription}\n---`
     : "";
 
   const prospectContext = [
     companyContext,
-    prospect.prospectNotes ? `Notes internes sur ce prospect :\n${prospect.prospectNotes}` : "",
+    prospect.prospectNotes ? `Notes internes :\n${prospect.prospectNotes}` : "",
     context ? `Contexte additionnel : ${context}` : "",
+    isFacebook ? `Note : seule présence en ligne = page Facebook (pas de site). À utiliser comme contexte secteur, ne pas critiquer dans l'email.` : "",
   ].filter(Boolean).join("\n\n");
-
-  const facebookHint = isFacebook
-    ? `Note : leur seule présence en ligne est une page Facebook. C'est pertinent pour identifier un besoin potentiel (pas de site = pas de référencement, pas de crédibilité en ligne), mais NE PAS le mentionner comme une critique dans l'email — l'intégrer comme contexte pour formuler le problème sectoriel.`
-    : "";
 
   const message = await anthropic.messages.create({
     model: MODEL_SONNET,
-    max_tokens: 1500,
+    max_tokens: 1000,
     messages: [
       {
         role: "user",
-        content: `Tu es Pierre Connes, auto-entrepreneur IT (DeepShift — web apps sur mesure, outils de gestion et d'automatisation). Tu vas rédiger un email de prospection froide.
+        content: `Tu es Pierre Connes (DeepShift), auto-entrepreneur IT spécialisé en outils de gestion sur mesure. Tu rédiges un email de prospection froide B2B.
 
 Prospect :
-- Nom : ${prospect.name}
 - Entreprise : ${prospect.company ?? "inconnue"}
-- Secteur / besoin pressenti : ${prospect.needType.join(", ") || "non précisé"}
+- Secteur / besoin : ${prospect.needType.join(", ") || "non précisé"}
 - Source : ${prospect.source ?? "inconnue"}
 
 ${prospectContext}
-${facebookHint}
 
 ---
-ÉTAPE 1 — ANALYSE INTERNE (ne pas écrire dans l'email, juste raisonner) :
-
+ÉTAPE 1 — ANALYSE (ne pas écrire dans l'email) :
 Identifie pour CE type de structure précis :
-- Quelles données gèrent-ils au quotidien ? (stocks, fiches, registres, plannings, suivis...)
-- Quelles tâches sont probablement encore manuelles ou réparties sur plusieurs supports ?
-- Quel est le détail concret et vivant qui montre que tu connais leur métier ? (pas une généralité)
+- Quelles données gèrent-ils au quotidien ? (fiches, stocks, registres, plannings, suivis...)
+- Quelles tâches sont probablement manuelles ou éparpillées sur plusieurs supports ?
+- Quel détail concret et vivant montre que tu connais leur métier ?
 
 ---
-ÉTAPE 2 — RÉDACTION (structure obligatoire) :
+ÉTAPE 2 — EMAIL (structure obligatoire) :
 
-1. SALUTATION : "Bonjour,"
+Salutation : "Bonjour,"
 
-2. RÉALITÉ TERRAIN (1-2 phrases)
-   Ouvre directement sur leur quotidien — pas sur DeepShift, pas sur toi.
-   Cite 2-3 éléments de gestion très concrets et spécifiques à CE métier.
-   Inclus 1 détail précis et vivant issu de l'étape 1 (pas abstrait).
-   Termine par une micro-légitimité : "c'est ce que je rencontre dans ce type de structure" ou "après avoir échangé avec plusieurs [type de structure]".
-   Pas de tirets, pas de listes à puces.
+Corps (2-3 phrases) :
+- Ouvre directement sur leur réalité quotidienne, pas sur toi ni sur DeepShift
+- Cite 2-3 éléments de gestion concrets et spécifiques à CE métier
+- Inclus un détail précis et vivant (pas abstrait) tiré de l'étape 1
+- Pas de tirets, pas de listes, pas de superlatifs
 
-3. POSITIONNEMENT (1 phrase)
-   "Je conçois des outils simples pour centraliser tout ça pour les [type de structure nommé précisément], sans usine à gaz."
+Positionnement (1 phrase) :
+"Je conçois des outils simples pour centraliser tout ça pour les [type de structure nommé précisément], sans usine à gaz."
 
-4. QUESTION (FIXE)
-   "Question rapide : aujourd'hui, vous gérez ça plutôt sur un outil centralisé, ou sur plusieurs supports ?"
+Question (FIXE, ne pas modifier) :
+"Question rapide : aujourd'hui, vous gérez ça plutôt sur un outil centralisé, ou sur plusieurs supports ?"
 
-5. SIGNATURE + RGPD
-   "Bien cordialement,\n\nPierre Connes\nDeepShift\n\nVous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
+Signature (FIXE) :
+"Bien cordialement,
 
-STYLE :
-- 90 à 130 mots pour le corps
-- Ton sobre et direct, vouvoiement
-- Pas de tirets (—) dans le corps, pas de listes, pas de superlatifs
+Pierre Connes
+DeepShift
+
+Vous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
+
+Règles de style :
+- 80 à 120 mots pour le corps
+- Ton sobre, direct, vouvoiement
+- Pas de tirets (—) dans le corps, pas de listes à puces
 - Pas de "Je me permets", "J'espère que", "je travaille sur"
 
 Réponds UNIQUEMENT en JSON valide :
 {
   "subject": "Objet concret et non-commercial (6-8 mots, pas de majuscules inutiles)",
   "body": "Corps complet de l'email",
-  "insights": ["élément terrain spécifique 1", "élément terrain spécifique 2"]
+  "insights": ["élément terrain identifié 1", "élément terrain identifié 2"]
 }`,
       },
     ],
