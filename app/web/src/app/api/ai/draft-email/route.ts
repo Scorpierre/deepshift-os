@@ -74,28 +74,29 @@ NE PAS parler de "réservations de groupes" ou "gestion d'événements" sauf si 
 2. ACCROCHE (1 phrase — FIXE, ne pas modifier)
    "Je me permets de vous contacter car je travaille sur des outils simples de gestion et d'automatisation pour des structures comme la vôtre."
 
-3. PROBLÈME SPÉCIFIQUE (2-3 phrases max)
-   Basé sur ton analyse de l'étape 1 : cite 1-2 tâches internes concrètes et spécifiques à CE type de structure, pas des généralités.
-   Formule depuis leur point de vue ("beaucoup de structures comme la vôtre...", "ce type de gestion...").
-   Interdit : "réservations", "suivi d'événements", "reporting", "planning de groupes" — sauf si ça colle vraiment à leur activité principale.
+3. SOLUTIONS CONCRÈTES (2 phrases max)
+   Basé sur ton analyse de l'étape 1 : propose 1 ou 2 outils concrets que tu pourrais développer sur mesure pour CE type de structure.
+   Formule en termes de solutions, pas de problèmes. Pas de description de leur galère, pas de "vous gérez probablement X sur Excel".
+   Exemple de formulation : "Je développe par exemple des outils de gestion des stocks ou de suivi individuel des animaux, adaptés au fonctionnement d'une structure comme la vôtre."
+   Interdit absolu : tirets (—), "souvent", "beaucoup de structures", "charge", "chronophage", listes à puces, énumération de problèmes.
 
 4. CTA (1 question — FIXE, ne pas modifier)
-   "Est-ce que c'est quelque chose que vous rencontrez aussi dans votre fonctionnement actuel ?"
+   "Est-ce que c'est quelque chose qui pourrait vous être utile ?"
 
 5. SIGNATURE
-   "Bien cordialement,\\nPierre — DeepShift"
+   "Bien cordialement,\nPierre — DeepShift"
 
 Règles de style :
 - Ton professionnel, sobre, entre deux pros
 - Pas de "J'espère que", pas de superlatifs, pas de jargon marketing
-- Pas de liste à puces dans l'email
-- Phrases courtes
+- Pas de liste à puces, pas de tirets dans le corps de l'email
+- Phrases courtes et directes
 
 Réponds UNIQUEMENT en JSON valide :
 {
   "subject": "Objet court (6-8 mots max, sobre, pas de majuscules inutiles)",
   "body": "Corps complet de l'email en respectant la structure",
-  "insights": ["tâche interne spécifique identifiée 1", "tâche interne spécifique identifiée 2"]
+  "insights": ["solution identifiée 1", "solution identifiée 2"]
 }`,
       },
     ],
