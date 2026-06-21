@@ -4,7 +4,7 @@ import { anthropic } from "@/lib/anthropic";
 import { listUnreadEmailIds, listSentEmailIds, getEmailMessage, extractEmailAddress } from "@/lib/gmail";
 import { parseAiJson } from "@/lib/parse-ai-json";
 import { MODEL_HAIKU } from "@/config";
-import { updateCalendarEvent, deleteCalendarEvent } from "@/lib/google-calendar";
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } from "@/lib/google-calendar";
 
 type Intent =
   | "INTERESTED"
@@ -207,14 +207,31 @@ export async function POST(request: NextRequest) {
     });
 
     // Apply meeting lifecycle actions on Google Calendar
-    if (meetingAction && existingMeetingEmail?.meetingEventId) {
+    if (meetingAction && existingMeetingEmail) {
       const eventId = existingMeetingEmail.meetingEventId;
       try {
         if (meetingAction === "CONFIRMED") {
-          await updateCalendarEvent(eventId, {
-            description: `RDV confirmé par le prospect — ${analysis}`,
-          });
-        } else if (meetingAction === "RESCHEDULED" && newMeetingDatetime) {
+          if (eventId) {
+            await updateCalendarEvent(eventId, {
+              description: `RDV confirmé par le prospect — ${analysis}`,
+            });
+          } else if (existingMeetingEmail.aiMeetingDate) {
+            // Event pas encore créé — auto-créer maintenant que c'est confirmé
+            const start = existingMeetingEmail.aiMeetingDate;
+            const end = new Date(start.getTime() + 60 * 60 * 1000);
+            const calEvent = await createCalendarEvent({
+              summary: `RDV ${prospect.name}`,
+              description: `Confirmé par email — ${analysis}`,
+              start: { dateTime: start.toISOString(), timeZone: "Europe/Paris" },
+              end: { dateTime: end.toISOString(), timeZone: "Europe/Paris" },
+              attendees: [{ email: prospect.email }],
+            });
+            await prisma.email.update({
+              where: { id: existingMeetingEmail.id },
+              data: { meetingEventId: calEvent.id },
+            });
+          }
+        } else if (eventId && meetingAction === "RESCHEDULED" && newMeetingDatetime) {
           const newStart = new Date(newMeetingDatetime);
           const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
           await updateCalendarEvent(eventId, {
@@ -227,7 +244,7 @@ export async function POST(request: NextRequest) {
             where: { id: existingMeetingEmail.id },
             data: { aiMeetingDate: newStart },
           });
-        } else if (meetingAction === "CANCELLED") {
+        } else if (eventId && meetingAction === "CANCELLED") {
           await deleteCalendarEvent(eventId);
           await prisma.email.update({
             where: { id: existingMeetingEmail.id },
