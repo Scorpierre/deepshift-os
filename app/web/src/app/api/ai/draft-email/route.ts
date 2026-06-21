@@ -56,48 +56,43 @@ ${facebookHint}
 ---
 ÉTAPE 1 — ANALYSE INTERNE (ne pas écrire dans l'email, juste raisonner) :
 
-Avant de rédiger, pose-toi ces questions sur cette structure spécifique :
-- Qu'est-ce que cette organisation gère au quotidien en interne ? (stocks, plannings, fiches, suivis, registres...)
-- Quelles sont les tâches répétitives propres à CE métier précis ? (pas au secteur en général)
-- Quels outils utilisent-ils probablement aujourd'hui pour ces tâches ? (Excel, cahiers, logiciels métier génériques...)
-- Où est la friction la plus évidente pour eux ?
-
-Exemple pour un aquarium : suivi de la santé et de l'alimentation de chaque animal, inventaire des espèces et renouvellement du stock, registre des soins vétérinaires, plannings de nourrissage par bassin, maintenance des installations techniques.
-NE PAS parler de "réservations de groupes" ou "gestion d'événements" sauf si c'est vraiment le cœur de leur activité.
+Identifie pour CE type de structure précis :
+- Quelles données gèrent-ils au quotidien ? (stocks, fiches, registres, plannings, suivis...)
+- Quelles tâches sont probablement encore manuelles ou réparties sur plusieurs supports ?
+- Quel est le détail concret et vivant qui montre que tu connais leur métier ? (pas une généralité)
 
 ---
-ÉTAPE 2 — RÉDACTION (structure obligatoire, 5 blocs) :
+ÉTAPE 2 — RÉDACTION (structure obligatoire) :
 
-1. SALUTATION
-   "Bonjour,"
+1. SALUTATION : "Bonjour,"
 
 2. RÉALITÉ TERRAIN (1-2 phrases)
-   Ouvre directement sur leur réalité quotidienne, pas sur toi. Cite 2-3 éléments de gestion très concrets et spécifiques à leur métier (tirés de l'étape 1).
-   Inclus 1 détail vivant et précis qui montre que tu connais leur quotidien (ex: un soigneur qui note les soins à la main, des données perdues entre deux outils, un registre difficile à retrouver).
-   Termine la phrase ou le paragraphe par une micro-preuve de légitimité : "après avoir échangé avec plusieurs [type de structure]" ou "c'est ce que je rencontre dans ce type de structure".
-   Pas de tirets (—). Pas de liste à puces.
+   Ouvre directement sur leur quotidien — pas sur DeepShift, pas sur toi.
+   Cite 2-3 éléments de gestion très concrets et spécifiques à CE métier.
+   Inclus 1 détail précis et vivant issu de l'étape 1 (pas abstrait).
+   Termine par une micro-légitimité : "c'est ce que je rencontre dans ce type de structure" ou "après avoir échangé avec plusieurs [type de structure]".
+   Pas de tirets, pas de listes à puces.
 
-3. POSITIONNEMENT (1 phrase — adapter le type de structure, le reste est quasi-fixe)
-   "Je conçois des outils simples pour centraliser tout ça pour les [type de structure précis], sans usine à gaz."
+3. POSITIONNEMENT (1 phrase)
+   "Je conçois des outils simples pour centraliser tout ça pour les [type de structure nommé précisément], sans usine à gaz."
 
-4. QUESTION (FIXE, ne pas modifier)
-   "Question rapide : aujourd'hui, vous suivez ça plutôt sur un outil centralisé, ou sur plusieurs supports ?"
+4. QUESTION (FIXE)
+   "Question rapide : aujourd'hui, vous gérez ça plutôt sur un outil centralisé, ou sur plusieurs supports ?"
 
 5. SIGNATURE + RGPD
    "Bien cordialement,\n\nPierre Connes\nDeepShift\n\nVous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
 
-Règles de style :
-- Ton sobre et direct, entre deux pros
-- Pas de pitch, pas de solution proposée — juste ouvrir une discussion
+STYLE :
+- 90 à 130 mots pour le corps
+- Ton sobre et direct, vouvoiement
+- Pas de tirets (—) dans le corps, pas de listes, pas de superlatifs
 - Pas de "Je me permets", "J'espère que", "je travaille sur"
-- Pas de tirets (—) dans le corps du mail, pas de liste à puces
-- Phrases courtes
 
 Réponds UNIQUEMENT en JSON valide :
 {
-  "subject": "Objet court, concret et non-commercial (6-8 mots max, pas de majuscules inutiles)",
-  "body": "Corps complet de l'email en respectant la structure",
-  "insights": ["élément terrain spécifique identifié 1", "élément terrain spécifique identifié 2"]
+  "subject": "Objet concret et non-commercial (6-8 mots, pas de majuscules inutiles)",
+  "body": "Corps complet de l'email",
+  "insights": ["élément terrain spécifique 1", "élément terrain spécifique 2"]
 }`,
       },
     ],
