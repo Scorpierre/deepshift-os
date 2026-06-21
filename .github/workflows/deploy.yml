@@ -33,7 +33,7 @@ jobs:
             git pull origin main
             cd app/web
             npm install
-            DATABASE_URL='${{ secrets.DATABASE_URL }}' npx prisma migrate deploy
+            DATABASE_URL='${{ secrets.DATABASE_URL }}' npx prisma db push
             docker compose build --no-cache
             docker compose up -d
             echo "✅ Deploy done at $(date)"
