@@ -134,3 +134,58 @@ export async function createCalendarEvent(
 
   return res.json();
 }
+
+/**
+ * Met à jour un event Google Calendar existant (patch partiel).
+ */
+export async function updateCalendarEvent(
+  eventId: string,
+  patch: {
+    summary?: string;
+    description?: string;
+    start?: { dateTime: string; timeZone?: string };
+    end?: { dateTime: string; timeZone?: string };
+  },
+  calendarId = "primary"
+): Promise<CalendarEvent> {
+  const token = await getAccessToken();
+
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Calendar update error ${res.status}: ${JSON.stringify(err)}`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Supprime un event Google Calendar.
+ */
+export async function deleteCalendarEvent(
+  eventId: string,
+  calendarId = "primary"
+): Promise<void> {
+  const token = await getAccessToken();
+
+  const res = await fetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    }
+  );
+
+  if (!res.ok && res.status !== 404) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(`Calendar delete error ${res.status}: ${JSON.stringify(err)}`);
+  }
+}

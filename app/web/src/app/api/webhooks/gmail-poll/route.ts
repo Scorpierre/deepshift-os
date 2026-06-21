@@ -4,6 +4,7 @@ import { anthropic } from "@/lib/anthropic";
 import { listUnreadEmailIds, getEmailMessage, extractEmailAddress } from "@/lib/gmail";
 import { parseAiJson } from "@/lib/parse-ai-json";
 import { MODEL_HAIKU } from "@/config";
+import { updateCalendarEvent, deleteCalendarEvent } from "@/lib/google-calendar";
 
 type Intent =
   | "INTERESTED"
@@ -31,10 +32,17 @@ function canTransition(current: string, target: string): boolean {
   return targetIdx > currentIdx;
 }
 
+type MeetingAction = "CONFIRMED" | "RESCHEDULED" | "CANCELLED" | null;
+
 async function analyzeEmail(
   emailBody: string,
-  prospectName: string
-): Promise<{ intent: Intent; analysis: string; laterDate?: string; meetingDatetime?: string; meetingNote?: string }> {
+  prospectName: string,
+  existingMeetingDate?: string | null
+): Promise<{ intent: Intent; analysis: string; laterDate?: string; meetingDatetime?: string; meetingNote?: string; meetingAction?: MeetingAction; newMeetingDatetime?: string }> {
+  const meetingContext = existingMeetingDate
+    ? `\nRDV existant planifié : ${new Date(existingMeetingDate).toLocaleString("fr-FR", { dateStyle: "full", timeStyle: "short" })}. Détermine si cet email parle de ce RDV (meetingAction) :\n- CONFIRMED : le prospect confirme le RDV\n- RESCHEDULED : le prospect veut reporter (extrais newMeetingDatetime)\n- CANCELLED : le prospect annule\n- null : pas lié au RDV existant`
+    : "";
+
   const message = await anthropic.messages.create({
     model: MODEL_HAIKU,
     max_tokens: 400,
@@ -44,6 +52,7 @@ async function analyzeEmail(
         content: `Tu analyses la réponse d'un prospect à un email de prospection commercial (DeepShift — web apps sur mesure).
 
 Prospect : ${prospectName}
+${meetingContext}
 
 Email reçu :
 ---
@@ -60,9 +69,9 @@ Détermine l'intent de ce prospect parmi :
 
 Si intent = LATER, extrais la date mentionnée (format ISO YYYY-MM-DD). Si pas de date précise, ajoute 3 mois à aujourd'hui (${new Date().toISOString().slice(0, 10)}).
 
-Si le prospect propose ou confirme un RDV avec une date et heure précises, extrais :
-- meetingDatetime : format ISO "YYYY-MM-DDTHH:mm:00" (heure Paris, pas UTC)
-- meetingNote : description courte du RDV (ex: "Appel de découverte", "RDV visio")
+Si le prospect propose ou confirme un nouveau RDV avec date et heure précises, extrais :
+- meetingDatetime : format ISO "YYYY-MM-DDTHH:mm:00" (heure Paris)
+- meetingNote : description courte (ex: "Appel de découverte", "RDV visio")
 
 Réponds UNIQUEMENT en JSON :
 {
@@ -70,7 +79,9 @@ Réponds UNIQUEMENT en JSON :
   "analysis": "1 phrase résumant la réponse du prospect",
   "laterDate": "YYYY-MM-DD ou null",
   "meetingDatetime": "YYYY-MM-DDTHH:mm:00 ou null",
-  "meetingNote": "description courte ou null"
+  "meetingNote": "description courte ou null",
+  "meetingAction": "CONFIRMED|RESCHEDULED|CANCELLED|null",
+  "newMeetingDatetime": "YYYY-MM-DDTHH:mm:00 ou null (si RESCHEDULED)"
 }`,
       },
     ],
@@ -80,6 +91,7 @@ Réponds UNIQUEMENT en JSON :
   const parsed = parseAiJson<{
     intent?: Intent; analysis?: string; laterDate?: string;
     meetingDatetime?: string; meetingNote?: string;
+    meetingAction?: MeetingAction; newMeetingDatetime?: string;
   }>(raw, "gmail-poll");
   return {
     intent: parsed?.intent ?? "UNCLEAR",
@@ -87,11 +99,13 @@ Réponds UNIQUEMENT en JSON :
     laterDate: parsed?.laterDate ?? undefined,
     meetingDatetime: parsed?.meetingDatetime ?? undefined,
     meetingNote: parsed?.meetingNote ?? undefined,
+    meetingAction: parsed?.meetingAction ?? null,
+    newMeetingDatetime: parsed?.newMeetingDatetime ?? undefined,
   };
 }
 
 /**
- * Appelé par n8n toutes les 24h.
+ * Appelé par n8n toutes les heures.
  * Scan inbox 2 derniers jours, associe aux prospects, analyse l'intent et met à jour les statuts.
  */
 export async function POST(request: NextRequest) {
@@ -134,7 +148,16 @@ export async function POST(request: NextRequest) {
 
     if (!prospect) { skipped++; continue; }
 
-    const { intent, analysis, laterDate, meetingDatetime, meetingNote } = await analyzeEmail(message.body, prospect.name);
+    // Find most recent active meeting event for this prospect
+    const existingMeetingEmail = await prisma.email.findFirst({
+      where: { prospectId: prospect.id, meetingEventId: { not: null } },
+      orderBy: { sentAt: "desc" },
+      select: { id: true, meetingEventId: true, aiMeetingDate: true },
+    });
+
+    const { intent, analysis, laterDate, meetingDatetime, meetingNote, meetingAction, newMeetingDatetime } =
+      await analyzeEmail(message.body, prospect.name, existingMeetingEmail?.aiMeetingDate?.toISOString());
+
     const config = INTENT_CONFIG[intent];
 
     const newStatus = config.status && canTransition(prospect.status, config.status)
@@ -182,6 +205,39 @@ export async function POST(request: NextRequest) {
         aiMeetingNote: meetingNote ?? null,
       },
     });
+
+    // Apply meeting lifecycle actions on Google Calendar
+    if (meetingAction && existingMeetingEmail?.meetingEventId) {
+      const eventId = existingMeetingEmail.meetingEventId;
+      try {
+        if (meetingAction === "CONFIRMED") {
+          await updateCalendarEvent(eventId, {
+            description: `RDV confirmé par le prospect — ${analysis}`,
+          });
+        } else if (meetingAction === "RESCHEDULED" && newMeetingDatetime) {
+          const newStart = new Date(newMeetingDatetime);
+          const newEnd = new Date(newStart.getTime() + 60 * 60 * 1000);
+          await updateCalendarEvent(eventId, {
+            description: `Reporté par le prospect — ${analysis}`,
+            start: { dateTime: newStart.toISOString(), timeZone: "Europe/Paris" },
+            end: { dateTime: newEnd.toISOString(), timeZone: "Europe/Paris" },
+          });
+          // Sync the stored date so future emails use the new datetime
+          await prisma.email.update({
+            where: { id: existingMeetingEmail.id },
+            data: { aiMeetingDate: newStart },
+          });
+        } else if (meetingAction === "CANCELLED") {
+          await deleteCalendarEvent(eventId);
+          await prisma.email.update({
+            where: { id: existingMeetingEmail.id },
+            data: { meetingEventId: null },
+          });
+        }
+      } catch (e) {
+        console.error("Calendar lifecycle error:", e);
+      }
+    }
 
     processed++;
   }
