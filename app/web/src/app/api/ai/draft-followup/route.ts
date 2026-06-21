@@ -30,22 +30,41 @@ export async function POST(request: NextRequest) {
 
   const firstEmail = prospect.emails[0];
 
-  const instructions =
+  const structure =
     followupNumber === 1
-      ? `C'est une PREMIÈRE RELANCE (J+3). Le prospect n'a pas répondu à ton premier email.
-Règles :
-- Très court : 2 paragraphes max
-- Ton professionnel et direct, sans formules creuses
-- Apporte un angle différent du premier email ou pose une question concrète
-- Termine par une question fermée simple (oui/non)
-- Signature : "Pierre — DeepShift"`
-      : `C'est la DEUXIÈME et DERNIÈRE RELANCE (J+7). Le prospect n'a toujours pas répondu.
-Règles :
-- 3-4 phrases maximum
-- Ton neutre et professionnel, sans reproche ni fausse chaleur
-- Porte ouverte sans pression
-- Une seule question directe
-- Signature : "Pierre — DeepShift"`;
+      ? `---
+STRUCTURE OBLIGATOIRE pour la relance J+3 (3 blocs, rien d'autre) :
+
+1. SALUTATION
+   "Bonjour [Prénom],"
+
+2. RELANCE (2 phrases max)
+   • Phrase 1 : une observation ou angle nouveau par rapport au premier email — pas une répétition, une perspective différente sur leur situation ou une question concrète sur leur besoin
+   • Phrase 2 (optionnelle) : reformulation courte de la valeur apportée, sous un angle différent
+
+3. CTA (1 question fermée oui/non)
+   Varie légèrement par rapport au premier email (ex: "Avez-vous eu l'occasion d'y réfléchir ?" ou "Est-ce que le timing est bon de votre côté ?")
+
+4. SIGNATURE
+   "Pierre — DeepShift"
+
+Règles : Très court. Pas de "J'espère que", pas de reproche, pas de formule creuse.`
+      : `---
+STRUCTURE OBLIGATOIRE pour la relance J+7 — dernier email (2 blocs, rien d'autre) :
+
+1. SALUTATION
+   "Bonjour [Prénom],"
+
+2. MESSAGE (3-4 phrases max, tout en un bloc)
+   • Ton neutre, sans pression, sans reproche
+   • Reconnaître que ce n'est peut-être pas le bon moment
+   • Laisser la porte ouverte clairement
+   • Une seule question directe en fin de bloc
+
+3. SIGNATURE
+   "Pierre — DeepShift"
+
+Règles : Le plus court des trois emails. Pas de résumé de l'offre. Porte ouverte uniquement.`;
 
   const message = await anthropic.messages.create({
     model: MODEL_HAIKU,
@@ -56,21 +75,22 @@ Règles :
         content: `Tu es Pierre Connes (DeepShift), freelance IT spécialisé en web apps et consulting digital.
 
 Prospect :
-- Nom : ${prospect.name}
+- Prénom / Nom : ${prospect.name}
 - Entreprise : ${prospect.company ?? "inconnue"}
 - Besoin : ${prospect.needType.join(", ") || "non précisé"}
 ${prospect.companyDescription ? `- Contexte : ${prospect.companyDescription}` : ""}
 
-${firstEmail ? `Premier email envoyé :
+${firstEmail ? `Premier email envoyé (référence pour la relance) :
 Objet : ${firstEmail.subject}
-Contenu : ${firstEmail.body}` : "Aucun email précédent disponible."}
+---
+${firstEmail.body}` : "Aucun email précédent disponible."}
 
-${instructions}
+${structure}
 
 Réponds UNIQUEMENT en JSON valide :
 {
-  "subject": "Re: [objet court]",
-  "body": "Corps de la relance"
+  "subject": "Re: [reprend l'objet du premier email]",
+  "body": "Corps de la relance en respectant la structure"
 }`,
       },
     ],

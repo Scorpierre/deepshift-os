@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  ArrowLeft, Bell, Check, ChevronDown, Euro, ExternalLink,
-  FileText, FolderKanban, Globe, Loader2, Mail, Paperclip, Pencil, Plus, Receipt, Send,
-  Sparkles, Tag, Trash2, X,
+  ArrowLeft, Check, ChevronDown,
+  FileText, FolderKanban, Loader2, Mail, Paperclip, Pencil, Plus, Receipt, Send,
+  Sparkles, Trash2, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -100,13 +100,6 @@ type Prospect = {
   aiRecommendedAction: string | null;
   emails: EmailEntry[];
   reminders: Reminder[];
-};
-
-type EmailDraft = {
-  subject: string;
-  body: string;
-  insights?: string[];
-  scraped?: boolean;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -399,182 +392,6 @@ function TimelineEntry({ item }: { item: TimelineItem }) {
 
 }
 
-// ─── Email Modal ──────────────────────────────────────────────────────────────
-
-function EmailModal({
-  prospectId,
-  onClose,
-  onSent,
-}: {
-  prospectId: string;
-  onClose: () => void;
-  onSent: () => void;
-}) {
-  const [loading, setLoading] = useState(true);
-  const [draft, setDraft] = useState<EmailDraft | null>(null);
-  const [copied, setCopied] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sent, setSent] = useState(false);
-  const [dayWarning, setDayWarning] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch("/api/ai/draft-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ prospectId }),
-    })
-      .then((r) => r.json())
-      .then(setDraft)
-      .finally(() => setLoading(false));
-  }, [prospectId]);
-
-  function copy() {
-    if (!draft) return;
-    navigator.clipboard.writeText(`Objet : ${draft.subject}\n\n${draft.body}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  async function send(force = false) {
-    if (!draft) return;
-    setSending(true);
-    setDayWarning(null);
-    try {
-      const res = await fetch(`/api/prospects/${prospectId}/emails/send`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subject: draft.subject, body: draft.body, force }),
-      });
-      if (res.status === 422) {
-        const data = await res.json().catch(() => ({}));
-        if (data.warning) { setDayWarning(data.warning); return; }
-      }
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: res.statusText }));
-        alert((err as { error?: string }).error ?? "Erreur lors de l'envoi.");
-        return;
-      }
-      await res.json();
-      setSent(true);
-      onSent();
-      setTimeout(onClose, 1200);
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[82vh] flex flex-col animate-in zoom-in-95 duration-200">
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
-          <h2 className="font-semibold text-sm flex items-center gap-2">
-            <Sparkles size={15} className="text-violet-400" />
-            Email rédigé par Claude
-          </h2>
-          <div className="flex items-center gap-2">
-            {draft && !sent && (
-              <>
-                <button
-                  onClick={copy}
-                  className={`text-xs px-3 py-1.5 rounded-lg transition-colors ${
-                    copied
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : "bg-muted text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {copied ? "Copié !" : "Copier"}
-                </button>
-                {dayWarning ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-amber-400">{dayWarning}</span>
-                    <button
-                      onClick={() => send(true)}
-                      disabled={sending}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 disabled:opacity-50 transition-colors flex items-center gap-1.5 shrink-0"
-                    >
-                      {sending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                      Envoyer quand même
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => send()}
-                    disabled={sending}
-                    className="text-xs px-3 py-1.5 rounded-lg bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 disabled:opacity-50 transition-colors flex items-center gap-1.5"
-                  >
-                    {sending ? <Loader2 size={11} className="animate-spin" /> : <Send size={11} />}
-                    {sending ? "Envoi…" : "Envoyer"}
-                  </button>
-                )}
-              </>
-            )}
-            {sent && (
-              <span className="text-xs text-emerald-400 flex items-center gap-1.5">
-                <Check size={11} /> Envoyé !
-              </span>
-            )}
-            <button
-              onClick={onClose}
-              className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-
-        {/* Body */}
-        <div className="overflow-y-auto flex-1 p-5 space-y-4">
-          {loading ? (
-            <div className="flex flex-col items-center gap-3 py-12 text-muted-foreground">
-              <Loader2 size={22} className="animate-spin text-violet-400" />
-              <p className="text-sm">Analyse du prospect en cours…</p>
-              <p className="text-xs opacity-50">Scraping de la présence en ligne si disponible</p>
-            </div>
-          ) : draft ? (
-            <>
-              {draft.scraped && (
-                <p className="text-xs text-blue-400/70 flex items-center gap-1.5">
-                  <Globe size={11} />
-                  Personnalisé avec l'analyse de leur présence en ligne
-                </p>
-              )}
-              {draft.insights && draft.insights.length > 0 && (
-                <div className="bg-muted/40 rounded-xl px-3 py-2.5 space-y-1.5">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                    Observations
-                  </p>
-                  {draft.insights.map((insight, i) => (
-                    <p key={i} className="text-xs text-muted-foreground flex gap-1.5">
-                      <span className="text-blue-400 shrink-0">·</span>
-                      {insight}
-                    </p>
-                  ))}
-                </div>
-              )}
-              <div className="border border-border rounded-xl p-4 space-y-3">
-                <p className="text-sm">
-                  <span className="text-xs text-muted-foreground">Objet : </span>
-                  <span className="font-medium">{draft.subject}</span>
-                </p>
-                <div className="border-t border-border pt-3">
-                  <pre className="text-sm text-foreground/80 whitespace-pre-wrap font-sans leading-relaxed">
-                    {draft.body}
-                  </pre>
-                </div>
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted-foreground text-center py-12">
-              Erreur lors de la génération.
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function ProspectPage() {
@@ -584,7 +401,11 @@ export default function ProspectPage() {
   const [prospect, setProspect] = useState<Prospect | null>(null);
   const [loading, setLoading] = useState(true);
   const [scoring, setScoring] = useState(false);
-  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [emailDraft, setEmailDraft] = useState<{ subject: string; body: string; insights?: string[] } | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+  const [draftSending, setDraftSending] = useState(false);
+  const [draftSent, setDraftSent] = useState(false);
+  const [draftWarning, setDraftWarning] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showReminderForm, setShowReminderForm] = useState(false);
@@ -624,6 +445,40 @@ export default function ProspectPage() {
     },
     [id, load]
   );
+
+  async function generateDraft() {
+    setDraftLoading(true);
+    setEmailDraft(null);
+    setDraftSent(false);
+    setDraftWarning(null);
+    const data = await fetch("/api/ai/draft-email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prospectId: id }),
+    }).then((r) => r.json());
+    setEmailDraft({ subject: data.subject ?? "", body: data.body ?? "", insights: data.insights });
+    setDraftLoading(false);
+  }
+
+  async function sendDraft(force = false) {
+    if (!emailDraft) return;
+    setDraftSending(true);
+    setDraftWarning(null);
+    const res = await fetch(`/api/prospects/${id}/emails/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ subject: emailDraft.subject, body: emailDraft.body, force }),
+    });
+    if (res.status === 422) {
+      const data = await res.json().catch(() => ({}));
+      if (data.warning) { setDraftWarning(data.warning); setDraftSending(false); return; }
+    }
+    if (!res.ok) { setDraftSending(false); return; }
+    setDraftSent(true);
+    await load();
+    setTimeout(() => { setEmailDraft(null); setDraftSent(false); }, 2000);
+    setDraftSending(false);
+  }
 
   async function scoreProspect() {
     setScoring(true);
@@ -719,14 +574,6 @@ export default function ProspectPage() {
 
   return (
     <>
-      {emailModalOpen && (
-        <EmailModal
-          prospectId={id}
-          onClose={() => setEmailModalOpen(false)}
-          onSent={() => load()}
-        />
-      )}
-
       <div className="flex flex-col h-full overflow-hidden">
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
@@ -935,6 +782,76 @@ export default function ProspectPage() {
               </Section>
             )}
 
+            {(draftLoading || emailDraft) && (
+              <Section title="Email — brouillon Claude">
+                {draftLoading ? (
+                  <div className="flex items-center gap-2.5 py-6 text-muted-foreground text-sm">
+                    <Loader2 size={15} className="animate-spin text-violet-400" />
+                    Rédaction en cours…
+                  </div>
+                ) : emailDraft && (
+                  <div className="space-y-3">
+                    {emailDraft.insights && emailDraft.insights.length > 0 && (
+                      <div className="bg-muted/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">Observations utilisées</p>
+                        {emailDraft.insights.map((insight, i) => (
+                          <p key={i} className="text-xs text-muted-foreground flex gap-1.5">
+                            <span className="text-blue-400 shrink-0">·</span>{insight}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Objet</label>
+                      <input
+                        value={emailDraft.subject}
+                        onChange={(e) => setEmailDraft((d) => d ? { ...d, subject: e.target.value } : d)}
+                        className="w-full text-sm bg-muted/30 border border-border rounded-xl px-3 py-2 outline-none focus:border-primary/40 transition-colors"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] text-muted-foreground uppercase tracking-wide">Corps</label>
+                      <textarea
+                        value={emailDraft.body}
+                        onChange={(e) => setEmailDraft((d) => d ? { ...d, body: e.target.value } : d)}
+                        rows={12}
+                        className="w-full text-sm bg-muted/30 border border-border rounded-xl px-3 py-2.5 resize-none outline-none focus:border-primary/40 transition-colors leading-relaxed font-sans"
+                      />
+                    </div>
+                    {draftWarning && (
+                      <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-400/20 rounded-xl px-3 py-2">
+                        {draftWarning}
+                      </p>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      {draftSent ? (
+                        <span className="text-xs text-emerald-400 flex items-center gap-1.5">
+                          <Check size={11} /> Envoyé !
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => sendDraft(!!draftWarning)}
+                            disabled={draftSending}
+                            className="flex items-center gap-1.5 text-xs bg-blue-500/20 text-blue-300 border border-blue-500/20 px-3 py-1.5 rounded-lg hover:bg-blue-500/30 disabled:opacity-50 transition-colors"
+                          >
+                            {draftSending ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
+                            {draftWarning ? "Envoyer quand même" : "Envoyer"}
+                          </button>
+                          <button
+                            onClick={() => setEmailDraft(null)}
+                            className="text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-muted transition-colors"
+                          >
+                            Annuler
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Section>
+            )}
+
             <Section title={`Timeline · ${timeline.length} événement${timeline.length !== 1 ? "s" : ""}`}>
               {timeline.length > 0 ? (
                 <div className="space-y-3">
@@ -964,11 +881,12 @@ export default function ProspectPage() {
                 {scoring ? "Scoring…" : "Scorer IA"}
               </button>
               <button
-                onClick={() => setEmailModalOpen(true)}
-                className="w-full flex items-center justify-center gap-2 text-sm bg-blue-500/12 text-blue-300 border border-blue-500/20 px-3 py-2 rounded-xl hover:bg-blue-500/20 transition-all"
+                onClick={generateDraft}
+                disabled={draftLoading}
+                className="w-full flex items-center justify-center gap-2 text-sm bg-blue-500/12 text-blue-300 border border-blue-500/20 px-3 py-2 rounded-xl hover:bg-blue-500/20 disabled:opacity-50 transition-all"
               >
-                <Mail size={13} />
-                Générer email
+                {draftLoading ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />}
+                {draftLoading ? "Rédaction…" : emailDraft ? "Régénérer" : "Générer email"}
               </button>
               {["QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON"].includes(prospect.status) && (
                 <button

@@ -49,9 +49,9 @@ export async function POST(req: NextRequest) {
     if (!followupNumber) continue;
 
     const firstEmail = sentEmails[0];
-    const instructions = followupNumber === 1
-      ? `C'est une PREMIÈRE RELANCE (J+3). Le prospect n'a pas répondu.\n- Très court : 2 paragraphes max\n- Apporte un angle différent ou pose une question concrète\n- Termine par une question fermée (oui/non)\n- Signature : "Pierre — DeepShift"`
-      : `C'est la DEUXIÈME et DERNIÈRE RELANCE (J+7). Le prospect n'a toujours pas répondu.\n- 3-4 phrases maximum\n- Ton neutre, porte ouverte sans pression\n- Une seule question directe\n- Signature : "Pierre — DeepShift"`;
+    const structure = followupNumber === 1
+      ? `---\nSTRUCTURE OBLIGATOIRE pour la relance J+3 (3 blocs) :\n\n1. SALUTATION\n   "Bonjour [Prénom],"\n\n2. RELANCE (2 phrases max)\n   • Phrase 1 : observation ou angle nouveau — pas une répétition, une perspective différente sur leur situation\n   • Phrase 2 (optionnelle) : reformulation courte de la valeur, sous un angle différent\n\n3. CTA (1 question fermée)\n   Varie légèrement (ex: "Avez-vous eu l'occasion d'y réfléchir ?" ou "Est-ce que le timing est bon ?")\n\n4. SIGNATURE\n   "Pierre — DeepShift"\n\nRègles : Très court. Pas de "J'espère que", pas de formule creuse.`
+      : `---\nSTRUCTURE OBLIGATOIRE pour la relance J+7 — dernier email (2 blocs) :\n\n1. SALUTATION\n   "Bonjour [Prénom],"\n\n2. MESSAGE (3-4 phrases max)\n   • Ton neutre, sans pression ni reproche\n   • Reconnaître que ce n'est peut-être pas le bon moment\n   • Laisser la porte ouverte\n   • Une seule question directe en fin de bloc\n\n3. SIGNATURE\n   "Pierre — DeepShift"\n\nRègles : Le plus court des trois emails. Pas de résumé de l'offre.`;
 
     const message = await anthropic.messages.create({
       model: MODEL_HAIKU,
@@ -61,21 +61,22 @@ export async function POST(req: NextRequest) {
         content: `Tu es Pierre Connes (DeepShift), freelance IT spécialisé en web apps et consulting digital.
 
 Prospect :
-- Nom : ${prospect.name}
+- Prénom / Nom : ${prospect.name}
 - Entreprise : ${prospect.company ?? "inconnue"}
 - Besoin : ${prospect.needType.join(", ") || "non précisé"}
 ${prospect.companyDescription ? `- Contexte : ${prospect.companyDescription}` : ""}
 
-Premier email envoyé :
+Premier email envoyé (référence pour la relance) :
 Objet : ${firstEmail.subject}
-Contenu : ${firstEmail.body}
+---
+${firstEmail.body}
 
-${instructions}
+${structure}
 
 Réponds UNIQUEMENT en JSON valide :
 {
-  "subject": "Re: [objet court]",
-  "body": "Corps de la relance"
+  "subject": "Re: [reprend l'objet du premier email]",
+  "body": "Corps de la relance en respectant la structure"
 }`,
       }],
     });
