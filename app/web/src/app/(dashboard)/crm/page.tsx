@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Plus, Loader2, X, Archive } from "lucide-react";
+import { Plus, Loader2, X, Archive, Upload, CheckSquare, Square, ChevronRight } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -179,6 +179,298 @@ function GroupHeader({ label, count }: { label: string; count: number }) {
       <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/60">{label}</span>
       <span className="text-[10px] text-muted-foreground/40">{count}</span>
       <div className="flex-1 border-t border-border/40" />
+    </div>
+  );
+}
+
+// ─── CSV Import ───────────────────────────────────────────────────────────────
+
+type CsvRow = {
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  websiteUrl: string;
+  linkedinUrl: string;
+  source: string;
+  selected: boolean;
+};
+
+function parseCsvText(text: string): CsvRow[] {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+
+  const sep = lines[0].includes(";") ? ";" : ",";
+
+  function splitLine(line: string): string[] {
+    if (sep === ";") return line.split(";").map((f) => f.trim().replace(/^"|"$/g, ""));
+    const fields: string[] = [];
+    let cur = "";
+    let inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+        else inQ = !inQ;
+      } else if (ch === "," && !inQ) { fields.push(cur.trim()); cur = ""; }
+      else cur += ch;
+    }
+    fields.push(cur.trim());
+    return fields;
+  }
+
+  const headers = splitLine(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z]/g, ""));
+
+  function col(...aliases: string[]): number {
+    for (const a of aliases) {
+      const i = headers.findIndex((h) => h.includes(a));
+      if (i !== -1) return i;
+    }
+    return -1;
+  }
+
+  const idx = {
+    name: col("nom", "name", "prenom", "contact", "firstname", "lastname"),
+    company: col("entreprise", "company", "societe", "organisation", "org"),
+    email: col("email", "courriel", "mail"),
+    phone: col("telephone", "phone", "tel", "mobile", "portable"),
+    websiteUrl: col("website", "site", "url", "web"),
+    linkedinUrl: col("linkedin"),
+    source: col("source", "origine"),
+  };
+
+  const rows: CsvRow[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
+    const f = splitLine(lines[i]);
+    const g = (k: keyof typeof idx) => (idx[k] !== -1 && f[idx[k]] ? f[idx[k]].trim() : "");
+    if (!g("name") && !g("email")) continue;
+    rows.push({ name: g("name"), company: g("company"), email: g("email"), phone: g("phone"), websiteUrl: g("websiteUrl"), linkedinUrl: g("linkedinUrl"), source: g("source"), selected: true });
+  }
+  return rows;
+}
+
+function CsvImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const [step, setStep] = useState<"upload" | "preview" | "importing" | "done">("upload");
+  const [rows, setRows] = useState<CsvRow[]>([]);
+  const [progress, setProgress] = useState({ done: 0, total: 0, errors: 0 });
+  const [parseError, setParseError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function handleFile(file: File) {
+    if (!file.name.endsWith(".csv") && file.type !== "text/csv") {
+      setParseError("Seuls les fichiers .csv sont acceptés.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const parsed = parseCsvText(text);
+      if (parsed.length === 0) {
+        setParseError("Aucune ligne valide trouvée. Vérifiez le format du CSV.");
+        return;
+      }
+      setParseError(null);
+      setRows(parsed);
+      setStep("preview");
+    };
+    reader.readAsText(file, "UTF-8");
+  }
+
+  function toggleAll(val: boolean) {
+    setRows((r) => r.map((row) => ({ ...row, selected: val })));
+  }
+
+  function toggleRow(i: number) {
+    setRows((r) => r.map((row, idx) => idx === i ? { ...row, selected: !row.selected } : row));
+  }
+
+  async function startImport() {
+    const selected = rows.filter((r) => r.selected);
+    setProgress({ done: 0, total: selected.length, errors: 0 });
+    setStep("importing");
+
+    let errors = 0;
+    for (let i = 0; i < selected.length; i++) {
+      const row = selected[i];
+      try {
+        const res = await fetch("/api/prospects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: row.name || row.company || row.email,
+            email: row.email,
+            company: row.company || null,
+            phone: row.phone || null,
+            websiteUrl: row.websiteUrl || null,
+            linkedinUrl: row.linkedinUrl || null,
+            source: row.source || "CSV",
+          }),
+        });
+        if (!res.ok) errors++;
+      } catch {
+        errors++;
+      }
+      setProgress({ done: i + 1, total: selected.length, errors });
+    }
+    setStep("done");
+    setProgress((p) => ({ ...p, errors }));
+  }
+
+  const allSelected = rows.length > 0 && rows.every((r) => r.selected);
+  const selectedCount = rows.filter((r) => r.selected).length;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+          <div>
+            <h2 className="text-base font-semibold">Importer des prospects depuis un CSV</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Colonnes reconnues : nom, email, entreprise, telephone, website, linkedin, source
+            </p>
+          </div>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground p-1">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="overflow-y-auto flex-1 px-6 py-5">
+
+          {/* Step : upload */}
+          {step === "upload" && (
+            <div className="flex flex-col items-center gap-4">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="w-full border-2 border-dashed border-border rounded-xl p-10 flex flex-col items-center gap-3 text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+              >
+                <Upload size={28} />
+                <span className="text-sm">Cliquer pour choisir un fichier .csv</span>
+                <span className="text-xs text-muted-foreground/60">Séparateur virgule ou point-virgule · UTF-8</span>
+              </button>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={(e) => { if (e.target.files?.[0]) handleFile(e.target.files[0]); }}
+              />
+              {parseError && <p className="text-xs text-red-400">{parseError}</p>}
+              <a
+                href="data:text/csv;charset=utf-8,nom,email,entreprise,telephone,website,linkedin,source%0AJean Dupont,jean@acme.fr,Acme SAS,0612345678,https://acme.fr,,LinkedIn"
+                download="modele-import.csv"
+                className="text-xs text-primary/70 hover:text-primary underline"
+              >
+                Télécharger le modèle CSV
+              </a>
+            </div>
+          )}
+
+          {/* Step : preview */}
+          {step === "preview" && (
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">{rows.length} ligne{rows.length > 1 ? "s" : ""} détectée{rows.length > 1 ? "s" : ""}</span>
+                <button
+                  type="button"
+                  onClick={() => toggleAll(!allSelected)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {allSelected ? <CheckSquare size={14} /> : <Square size={14} />}
+                  {allSelected ? "Tout désélectionner" : "Tout sélectionner"}
+                </button>
+              </div>
+              <div className="rounded-lg border border-border overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted/40">
+                    <tr>
+                      <th className="w-8 px-3 py-2" />
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Nom</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Entreprise</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Email</th>
+                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Source</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row, i) => (
+                      <tr
+                        key={i}
+                        onClick={() => toggleRow(i)}
+                        className={`border-t border-border cursor-pointer transition-colors ${row.selected ? "bg-background hover:bg-muted/20" : "bg-muted/10 opacity-50"}`}
+                      >
+                        <td className="px-3 py-2">
+                          {row.selected ? <CheckSquare size={13} className="text-primary" /> : <Square size={13} className="text-muted-foreground" />}
+                        </td>
+                        <td className="px-3 py-2 max-w-[120px] truncate">{row.name || <span className="text-muted-foreground/40">—</span>}</td>
+                        <td className="px-3 py-2 max-w-[120px] truncate">{row.company || <span className="text-muted-foreground/40">—</span>}</td>
+                        <td className="px-3 py-2 max-w-[160px] truncate">{row.email || <span className="text-muted-foreground/40">—</span>}</td>
+                        <td className="px-3 py-2">{row.source || <span className="text-muted-foreground/40">—</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Step : importing */}
+          {step === "importing" && (
+            <div className="flex flex-col items-center gap-4 py-6">
+              <Loader2 size={28} className="animate-spin text-primary" />
+              <p className="text-sm font-medium">Import en cours…</p>
+              <p className="text-xs text-muted-foreground">{progress.done} / {progress.total} prospects créés</p>
+              <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-primary h-full transition-all duration-300"
+                  style={{ width: `${progress.total > 0 ? (progress.done / progress.total) * 100 : 0}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground/60">Claude score chaque prospect en arrière-plan</p>
+            </div>
+          )}
+
+          {/* Step : done */}
+          {step === "done" && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                <ChevronRight size={22} className="text-emerald-400" />
+              </div>
+              <p className="text-sm font-medium">Import terminé</p>
+              <p className="text-xs text-muted-foreground">
+                {progress.done - progress.errors} prospect{progress.done - progress.errors > 1 ? "s" : ""} créé{progress.done - progress.errors > 1 ? "s" : ""}
+                {progress.errors > 0 && <span className="text-amber-400 ml-2">· {progress.errors} ignoré{progress.errors > 1 ? "s" : ""} (doublons ou erreurs)</span>}
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex justify-end gap-3 px-6 py-4 border-t border-border shrink-0">
+          {step !== "importing" && (
+            <button type="button" onClick={step === "done" ? () => { onDone(); onClose(); } : onClose}
+              className="text-sm text-muted-foreground hover:text-foreground px-4 py-2 rounded-lg transition-colors">
+              {step === "done" ? "Fermer" : "Annuler"}
+            </button>
+          )}
+          {step === "preview" && (
+            <button
+              type="button"
+              disabled={selectedCount === 0}
+              onClick={startImport}
+              className="flex items-center gap-2 text-sm bg-primary text-primary-foreground px-5 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 font-medium transition-colors"
+            >
+              <Upload size={14} />
+              Importer {selectedCount} prospect{selectedCount > 1 ? "s" : ""}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -419,6 +711,7 @@ export default function CRMPage() {
   const [prospects, setProspects] = useState<Prospect[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showCsvModal, setShowCsvModal] = useState(false);
 
   const load = useCallback(async () => {
     const data = await fetch("/api/prospects").then((r) => r.json());
@@ -428,6 +721,14 @@ export default function CRMPage() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [load]);
+
+  // Auto-poll tant que des prospects sont en cours de scoring
+  useEffect(() => {
+    const hasScoring = prospects.some((p) => p.status === "SCORING" || p.status === "NEW");
+    if (!hasScoring) return;
+    const timer = setTimeout(() => load(), 3000);
+    return () => clearTimeout(timer);
+  }, [prospects, load]);
 
   function handleCreated(p: Prospect) {
     setProspects((prev) => [p, ...prev]);
@@ -453,6 +754,9 @@ export default function CRMPage() {
       {showModal && (
         <NewProspectModal onClose={() => setShowModal(false)} onCreated={handleCreated} />
       )}
+      {showCsvModal && (
+        <CsvImportModal onClose={() => setShowCsvModal(false)} onDone={load} />
+      )}
 
       <div className="flex flex-col h-full overflow-hidden">
         {/* Header */}
@@ -475,6 +779,13 @@ export default function CRMPage() {
               <Archive size={13} />
               Archivés{lostCount > 0 && <span className="ml-1 text-muted-foreground/60">{lostCount}</span>}
             </Link>
+            <button
+              onClick={() => setShowCsvModal(true)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border px-3 py-2 rounded-lg hover:text-foreground hover:border-foreground/30 transition-colors"
+            >
+              <Upload size={13} />
+              Importer CSV
+            </button>
             <button
               onClick={() => setShowModal(true)}
               className="flex items-center gap-1.5 text-sm bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 transition-colors font-medium"

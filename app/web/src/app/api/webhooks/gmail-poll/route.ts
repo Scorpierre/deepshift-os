@@ -34,10 +34,10 @@ function canTransition(current: string, target: string): boolean {
 async function analyzeEmail(
   emailBody: string,
   prospectName: string
-): Promise<{ intent: Intent; analysis: string; laterDate?: string }> {
+): Promise<{ intent: Intent; analysis: string; laterDate?: string; meetingDatetime?: string; meetingNote?: string }> {
   const message = await anthropic.messages.create({
     model: MODEL_HAIKU,
-    max_tokens: 300,
+    max_tokens: 400,
     messages: [
       {
         role: "user",
@@ -60,22 +60,33 @@ Détermine l'intent de ce prospect parmi :
 
 Si intent = LATER, extrais la date mentionnée (format ISO YYYY-MM-DD). Si pas de date précise, ajoute 3 mois à aujourd'hui (${new Date().toISOString().slice(0, 10)}).
 
+Si le prospect propose ou confirme un RDV avec une date et heure précises, extrais :
+- meetingDatetime : format ISO "YYYY-MM-DDTHH:mm:00" (heure Paris, pas UTC)
+- meetingNote : description courte du RDV (ex: "Appel de découverte", "RDV visio")
+
 Réponds UNIQUEMENT en JSON :
 {
   "intent": "INTERESTED|NOT_INTERESTED|NEEDS_INFO|PROPOSAL_REQUESTED|LATER|UNCLEAR",
   "analysis": "1 phrase résumant la réponse du prospect",
-  "laterDate": "YYYY-MM-DD ou null"
+  "laterDate": "YYYY-MM-DD ou null",
+  "meetingDatetime": "YYYY-MM-DDTHH:mm:00 ou null",
+  "meetingNote": "description courte ou null"
 }`,
       },
     ],
   });
 
   const raw = message.content[0].type === "text" ? message.content[0].text : "";
-  const parsed = parseAiJson<{ intent?: Intent; analysis?: string; laterDate?: string }>(raw, "gmail-poll");
+  const parsed = parseAiJson<{
+    intent?: Intent; analysis?: string; laterDate?: string;
+    meetingDatetime?: string; meetingNote?: string;
+  }>(raw, "gmail-poll");
   return {
     intent: parsed?.intent ?? "UNCLEAR",
     analysis: parsed?.analysis ?? "",
     laterDate: parsed?.laterDate ?? undefined,
+    meetingDatetime: parsed?.meetingDatetime ?? undefined,
+    meetingNote: parsed?.meetingNote ?? undefined,
   };
 }
 
@@ -123,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     if (!prospect) { skipped++; continue; }
 
-    const { intent, analysis, laterDate } = await analyzeEmail(message.body, prospect.name);
+    const { intent, analysis, laterDate, meetingDatetime, meetingNote } = await analyzeEmail(message.body, prospect.name);
     const config = INTENT_CONFIG[intent];
 
     const newStatus = config.status && canTransition(prospect.status, config.status)
@@ -167,6 +178,8 @@ export async function POST(request: NextRequest) {
         gmailId,
         aiAnalysis: analysis,
         aiIntent: intent,
+        aiMeetingDate: meetingDatetime ? new Date(meetingDatetime) : null,
+        aiMeetingNote: meetingNote ?? null,
       },
     });
 

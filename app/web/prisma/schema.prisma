@@ -89,8 +89,11 @@ model Email {
   gmailId   String? // ID Gmail pour le threading
 
   // Analyse IA
-  aiAnalysis String? // résumé Claude de l'email reçu
-  aiIntent   String? // INTERESTED / NOT_INTERESTED / NEEDS_INFO / CALLBACK
+  aiAnalysis     String? // résumé Claude de l'email reçu
+  aiIntent       String? // INTERESTED / NOT_INTERESTED / NEEDS_INFO / CALLBACK
+  aiMeetingDate  DateTime? // date/heure de RDV proposée par le prospect
+  aiMeetingNote  String?   // description courte du RDV proposé
+  meetingEventId String?   // ID Google Calendar si confirmé
 
   @@index([prospectId])
   @@index([prospectId, direction])

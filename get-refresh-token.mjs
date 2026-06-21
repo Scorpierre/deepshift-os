@@ -2,10 +2,16 @@ const CLIENT_ID = "756590890641-53pss8h6v2e70tcg9bc6c6cshqfhk55r.apps.googleuser
 const CLIENT_SECRET = "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";
 const REDIRECT_URI = "urn:ietf:wg:oauth:2.0:oob";
 
+const SCOPES = [
+  "https://mail.google.com/",
+  "https://www.googleapis.com/auth/calendar",
+  "https://www.googleapis.com/auth/tasks",
+].join(" ");
+
 const code = process.argv[2];
 
 if (!code) {
-  const url = `https://accounts.google.com/o/oauth2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=https://mail.google.com/&access_type=offline&prompt=consent`;
+  const url = `https://accounts.google.com/o/oauth2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${encodeURIComponent(SCOPES)}&access_type=offline&prompt=consent`;
   console.log("\n1. Ouvre ce lien dans ton navigateur :\n");
   console.log(url);
   console.log("\n2. Connecte-toi avec scopierres@gmail.com");
