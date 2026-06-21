@@ -13,12 +13,16 @@ export async function POST(request: NextRequest) {
   const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
   const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
   const hasNoWebsite = !prospect.websiteUrl || isFacebook;
-  const needsWebsite = hasNoWebsite || prospect.needType.includes("site") || prospect.needType.includes("ecommerce");
   const needsApp = prospect.needType.some((n) => ["webapp", "api", "consulting", "autre"].includes(n));
+  const needsSite = prospect.needType.includes("site") || prospect.needType.includes("ecommerce");
 
-  // Si pas de site ou besoin explicite de site → angle présence web
-  // Si besoin d'outil/app ou présence web connue → angle gestion/automatisation
-  const angle: "web" | "gestion" = needsWebsite && !needsApp ? "web" : "gestion";
+  // "web"     → pas de site ou page FB seulement
+  // "refonte" → site existant, pas de besoin app explicite (Claude juge si le site est suffisant)
+  // "gestion" → besoin app/outil explicite
+  const angle: "web" | "refonte" | "gestion" =
+    needsApp ? "gestion"
+    : hasNoWebsite || needsSite ? "web"
+    : "refonte";
 
   const companyContext = prospect.aiSummary
     ? `Analyse commerciale du prospect :\n---\n${prospect.aiSummary}\n---`
@@ -32,60 +36,63 @@ export async function POST(request: NextRequest) {
     context ? `Contexte additionnel : ${context}` : "",
   ].filter(Boolean).join("\n\n");
 
+  const SIGNATURE = `Bien cordialement,\n\nPierre Connes\nDeepShift\n\nVous pouvez me répondre « stop » si vous ne souhaitez plus être contacté.`;
+
   const emailInstructions = angle === "web"
     ? `
-CONTEXTE : cette structure n'a pas de site web (ou seulement une page Facebook). Ne pas le mentionner comme une critique — formuler à partir de ce que ça leur fait perdre concrètement.
+CONTEXTE : cette structure n'a pas de site web (ou seulement une page Facebook). Formuler à partir de ce que ça leur fait perdre concrètement, pas comme une critique.
 
 ÉTAPE 1 — ANALYSE :
-Pour CE type de structure, identifie ce qu'un client cherche en ligne avant de les contacter ou de se déplacer (horaires, menu, services, tarifs, localisation...) et ce qu'il ne trouve pas sans site.
+Identifie ce qu'un client cherche en ligne avant de contacter ce type de structure (horaires, services, tarifs, localisation...) et ce qu'il ne trouve pas sans site.
 
 ÉTAPE 2 — EMAIL :
 
 Salutation : "Bonjour,"
 
-Phrase 1 — situation concrète :
-"Je conçois des sites web simples pour des [type de structure nommé précisément] qui veulent être trouvés facilement en ligne."
+Phrase 1 : "Je conçois des sites web simples pour des [type de structure] qui veulent être trouvés facilement en ligne."
 
-Phrase 2 — hypothèse à vérifier :
-"De ce que je comprends, quelqu'un qui vous cherche sur Google aujourd'hui trouve surtout votre page Facebook — mais pas toujours vos horaires, votre carte ou comment vous réserver. Mais je préfère le vérifier directement avec vous."
+Phrase 2 — hypothèse : "De ce que je comprends, quelqu'un qui vous cherche sur Google aujourd'hui trouve surtout votre page Facebook — mais pas toujours [1-2 infos clés spécifiques à leur secteur]. Mais je préfère le vérifier directement avec vous."
 
-Question (FIXE) :
-"Est-ce que ça correspond à votre situation, ou vous avez déjà quelque chose en place ?"
+Question (FIXE) : "Est-ce que ça correspond à votre situation, ou vous avez déjà quelque chose en place ?"
 
-Signature (FIXE) :
-"Bien cordialement,
+Signature (FIXE) : "${SIGNATURE}"
+`
+    : angle === "refonte"
+    ? `
+CONTEXTE : cette structure a un site web (${prospect.websiteUrl}). L'objectif n'est pas de critiquer le site mais d'ouvrir une discussion sur ce qu'il leur rapporte réellement — contacts, clients, visibilité.
 
-Pierre Connes
-DeepShift
+ÉTAPE 1 — ANALYSE :
+Pour CE type de structure et CE secteur, réfléchis à ce qu'un site web devrait idéalement faire (générer des contacts, être trouvé sur Google, convaincre un visiteur de passer à l'action) et formule une hypothèse honnête sur ce que beaucoup de sites dans ce secteur ne font pas encore bien.
 
-Vous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
+ÉTAPE 2 — EMAIL :
+
+Salutation : "Bonjour,"
+
+Phrase 1 : "Je travaille sur des sites web et des améliorations de présence en ligne pour des [type de structure], et je m'intéresse en ce moment à votre secteur."
+
+Phrase 2 — hypothèse : "De ce que je comprends, beaucoup de sites dans ce domaine sont peu optimisés pour [point spécifique au secteur : Google, mobile, prise de contact, conversion...] — mais je préfère vérifier avec vous plutôt que de supposer."
+
+Question (FIXE) : "Est-ce que votre site vous génère des contacts régulièrement, ou c'est plutôt anecdotique ?"
+
+Signature (FIXE) : "${SIGNATURE}"
 `
     : `
-CONTEXTE : cette structure gère probablement des données de suivi complexes au quotidien et pourrait bénéficier d'un outil centralisé sur mesure.
+CONTEXTE : cette structure a besoin d'un outil sur mesure pour centraliser ou automatiser une partie de sa gestion interne.
 
 ÉTAPE 1 — ANALYSE :
-Pour CE type de structure précis, identifie 2-3 éléments de suivi ou de gestion qui sont probablement éparpillés entre plusieurs fichiers ou cahiers au quotidien. Formule-les comme une hypothèse à vérifier, pas comme une certitude.
+Pour CE type de structure précis, identifie 2-3 éléments de suivi ou de gestion probablement éparpillés entre plusieurs fichiers ou cahiers. Formule une hypothèse à vérifier, pas une certitude.
 
 ÉTAPE 2 — EMAIL :
 
 Salutation : "Bonjour,"
 
-Phrase 1 — positionnement honnête :
-"Je conçois des outils de gestion simples pour des structures qui manipulent beaucoup de données de suivi au quotidien, et je m'intéresse en ce moment aux [type de structure nommé précisément]."
+Phrase 1 : "Je conçois des outils de gestion simples pour des structures qui manipulent beaucoup de données de suivi au quotidien, et je m'intéresse en ce moment aux [type de structure]."
 
-Phrase 2 — hypothèse à vérifier :
-"De ce que je comprends, [2-3 éléments de gestion spécifiques à leur métier] sont souvent répartis entre plusieurs fichiers et cahiers — mais je préfère le vérifier avec des gens du métier plutôt que de le supposer."
+Phrase 2 — hypothèse : "De ce que je comprends, [2-3 éléments spécifiques à leur métier] sont souvent répartis entre plusieurs fichiers et cahiers — mais je préfère le vérifier avec des gens du métier plutôt que de le supposer."
 
-Question (FIXE) :
-"Est-ce que ça correspond à votre réalité, ou je me trompe ? Je serais curieux de savoir comment vous gérez ça aujourd'hui."
+Question (FIXE) : "Est-ce que ça correspond à votre réalité, ou je me trompe ? Je serais curieux de savoir comment vous gérez ça aujourd'hui."
 
-Signature (FIXE) :
-"Bien cordialement,
-
-Pierre Connes
-DeepShift
-
-Vous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
+Signature (FIXE) : "${SIGNATURE}"
 `;
 
   const message = await anthropic.messages.create({
