@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     companyContext,
     prospect.prospectNotes ? `Notes internes :\n${prospect.prospectNotes}` : "",
     context ? `Contexte additionnel : ${context}` : "",
-    isFacebook ? `Note : seule présence en ligne = page Facebook (pas de site). À utiliser comme contexte secteur, ne pas critiquer dans l'email.` : "",
+    isFacebook ? `Note : seule présence en ligne = page Facebook (pas de site).` : "",
   ].filter(Boolean).join("\n\n");
 
   const message = await anthropic.messages.create({
@@ -43,27 +43,21 @@ ${prospectContext}
 
 ---
 ÉTAPE 1 — ANALYSE (ne pas écrire dans l'email) :
-Identifie pour CE type de structure précis :
-- Quelles données gèrent-ils au quotidien ? (fiches, stocks, registres, plannings, suivis...)
-- Quelles tâches sont probablement manuelles ou éparpillées sur plusieurs supports ?
-- Quel détail concret et vivant montre que tu connais leur métier ?
+Pour CE type de structure, identifie 2-3 éléments de suivi ou de gestion qui sont probablement éparpillés entre plusieurs fichiers ou cahiers au quotidien. Ne prétends pas les connaître avec certitude — tu vas le formuler comme une hypothèse à vérifier.
 
 ---
 ÉTAPE 2 — EMAIL (structure obligatoire) :
 
 Salutation : "Bonjour,"
 
-Corps (2-3 phrases) :
-- Ouvre directement sur leur réalité quotidienne, pas sur toi ni sur DeepShift
-- Cite 2-3 éléments de gestion concrets et spécifiques à CE métier
-- Inclus un détail précis et vivant (pas abstrait) tiré de l'étape 1
-- Pas de tirets, pas de listes, pas de superlatifs
+Phrase 1 — positionnement honnête :
+"Je conçois des outils de gestion simples pour des structures qui manipulent beaucoup de données de suivi au quotidien, et je m'intéresse en ce moment aux [type de structure nommé précisément]."
 
-Positionnement (1 phrase) :
-"Je conçois des outils simples pour centraliser tout ça pour les [type de structure nommé précisément]."
+Phrase 2 — hypothèse à vérifier :
+"De ce que je comprends, [2-3 éléments de gestion spécifiques à leur métier] sont souvent répartis entre plusieurs fichiers et cahiers — mais je préfère le vérifier avec des gens du métier plutôt que de le supposer."
 
 Question (FIXE, ne pas modifier) :
-"Question rapide : aujourd'hui, vous gérez ça plutôt sur un outil centralisé, ou sur plusieurs supports ?"
+"Est-ce que ça correspond à votre réalité, ou je me trompe ? Je serais curieux de savoir comment vous gérez ça aujourd'hui."
 
 Signature (FIXE) :
 "Bien cordialement,
@@ -74,16 +68,17 @@ DeepShift
 Vous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
 
 Règles de style :
-- 80 à 120 mots pour le corps
-- Ton sobre, direct, vouvoiement
+- 70 à 100 mots pour le corps
+- Ton sobre, direct, curieux — pas de pitch, pas de vente
+- Vouvoiement
 - Pas de tirets (—) dans le corps, pas de listes à puces
-- Pas de "Je me permets", "J'espère que", "je travaille sur"
+- Pas de "J'espère que", pas de superlatifs
 
 Réponds UNIQUEMENT en JSON valide :
 {
   "subject": "Objet concret et non-commercial (6-8 mots, pas de majuscules inutiles)",
   "body": "Corps complet de l'email",
-  "insights": ["élément terrain identifié 1", "élément terrain identifié 2"]
+  "insights": ["hypothèse terrain 1", "hypothèse terrain 2"]
 }`,
       },
     ],
