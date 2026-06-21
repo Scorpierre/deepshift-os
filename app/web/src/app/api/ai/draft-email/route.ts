@@ -66,37 +66,38 @@ Exemple pour un aquarium : suivi de la santé et de l'alimentation de chaque ani
 NE PAS parler de "réservations de groupes" ou "gestion d'événements" sauf si c'est vraiment le cœur de leur activité.
 
 ---
-ÉTAPE 2 — RÉDACTION (structure obligatoire, 4 blocs) :
+ÉTAPE 2 — RÉDACTION (structure obligatoire, 5 blocs) :
 
 1. SALUTATION
    "Bonjour,"
 
-2. ACCROCHE (1 phrase)
-   "Je me permets de vous contacter car je travaille sur des outils simples de gestion pour des structures comme [type de structure précis]."
-   Le type de structure doit être nommé précisément d'après leur activité (ex: "les aquariums", "les cabinets vétérinaires", "les associations culturelles") — jamais "comme la vôtre" ou générique.
+2. RÉALITÉ TERRAIN (1-2 phrases)
+   Ouvre directement sur leur réalité quotidienne, pas sur toi. Cite 2-3 éléments de gestion très concrets et spécifiques à leur métier (tirés de l'étape 1).
+   Inclus 1 détail vivant et précis qui montre que tu connais leur quotidien (ex: un soigneur qui note les soins à la main, des données perdues entre deux outils, un registre difficile à retrouver).
+   Termine la phrase ou le paragraphe par une micro-preuve de légitimité : "après avoir échangé avec plusieurs [type de structure]" ou "c'est ce que je rencontre dans ce type de structure".
+   Pas de tirets (—). Pas de liste à puces.
 
-3. OBSERVATION (1-2 phrases)
-   "Dans ce type d'environnement, le suivi des informations ([liste courte de 3-4 éléments spécifiques à leur métier]) est souvent réparti entre plusieurs supports, ce qui peut rendre la centralisation et le suivi quotidien assez complexes."
-   Les éléments entre parenthèses doivent être propres à leur activité réelle, tirés de l'analyse de l'étape 1. Pas de généralités.
+3. POSITIONNEMENT (1 phrase — adapter le type de structure, le reste est quasi-fixe)
+   "Je conçois des outils simples pour centraliser tout ça pour les [type de structure précis], sans usine à gaz."
 
-4. CTA (1 question de découverte — FIXE, ne pas modifier)
-   "Est-ce que vous utilisez aujourd'hui un outil centralisé pour ce suivi, ou plutôt plusieurs supports (Excel, cahiers, logiciels séparés) ?"
+4. QUESTION (FIXE, ne pas modifier)
+   "Question rapide : aujourd'hui, vous suivez ça plutôt sur un outil centralisé, ou sur plusieurs supports ?"
 
-5. SIGNATURE
-   "Bien cordialement,\nPierre — DeepShift"
+5. SIGNATURE + RGPD
+   "Bien cordialement,\n\nPierre Connes\nDeepShift\n\nVous pouvez me répondre « stop » si vous ne souhaitez plus être contacté."
 
 Règles de style :
 - Ton sobre et direct, entre deux pros
-- Pas de pitch, pas de vente, pas de solution proposée — juste ouvrir une discussion
-- Pas de "J'espère que", pas de superlatifs, pas de jargon marketing
-- Pas de liste à puces dans le corps du mail
+- Pas de pitch, pas de solution proposée — juste ouvrir une discussion
+- Pas de "Je me permets", "J'espère que", "je travaille sur"
+- Pas de tirets (—) dans le corps du mail, pas de liste à puces
 - Phrases courtes
 
 Réponds UNIQUEMENT en JSON valide :
 {
-  "subject": "Objet court (6-8 mots max, sobre)",
+  "subject": "Objet court, concret et non-commercial (6-8 mots max, pas de majuscules inutiles)",
   "body": "Corps complet de l'email en respectant la structure",
-  "insights": ["élément métier spécifique identifié 1", "élément métier spécifique identifié 2"]
+  "insights": ["élément terrain spécifique identifié 1", "élément terrain spécifique identifié 2"]
 }`,
       },
     ],
