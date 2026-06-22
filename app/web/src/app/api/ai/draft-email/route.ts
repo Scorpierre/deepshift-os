@@ -64,8 +64,10 @@ Paragraphe 1 :
 Paragraphe 2 :
 "Concrètement, je centralise tout ça au même endroit : [bénéfice visuel et concret, ce que l'utilisateur voit en un coup d'œil] — sans [friction spécifique éliminée]."
 
-Paragraphe 3 (FIXE) :
-"Avant d'aller plus loin, je préfère partir de votre réalité que de la supposer : aujourd'hui, vous gérez ça plutôt sur un outil unique, ou sur plusieurs supports séparés ?"
+Paragraphe 3 (question de diagnostic — à adapter au P2) :
+Commence par : "Avant d'aller plus loin, je préfère partir de votre réalité que de la supposer :"
+Puis pose UNE question courte et directe qui suit naturellement ce que tu as proposé au paragraphe 2.
+La question doit porter sur leur situation actuelle face au problème spécifique évoqué — pas une question générique sur les outils.
 
 Signature (FIXE) : "${SIGNATURE}"
 `
@@ -88,8 +90,9 @@ Paragraphe 1 :
 Paragraphe 2 :
 "Concrètement, quelqu'un qui vous cherche sur Google [bénéfice visuel et concret] — sans [friction actuelle]."
 
-Paragraphe 3 (FIXE) :
-"Avant d'aller plus loin, je préfère partir de votre réalité que de la supposer : aujourd'hui, vous gérez votre présence en ligne comment ?"
+Paragraphe 3 (question de diagnostic — à adapter au P2) :
+Commence par : "Avant d'aller plus loin, je préfère partir de votre réalité que de la supposer :"
+Puis pose UNE question courte qui suit naturellement le P2 — sur leur situation actuelle face au problème évoqué (absence de site, joignabilité, présence en ligne...).
 
 Signature (FIXE) : "${SIGNATURE}"
 `
@@ -112,8 +115,9 @@ Paragraphe 1 :
 Paragraphe 2 :
 "Concrètement, [bénéfice visuel et concret d'un site bien fait pour eux] — sans [friction actuelle]."
 
-Paragraphe 3 (FIXE) :
-"Avant d'aller plus loin, je préfère partir de votre réalité que de la supposer : est-ce que votre site vous génère des contacts régulièrement, ou c'est plutôt anecdotique ?"
+Paragraphe 3 (question de diagnostic — à adapter au P2) :
+Commence par : "Avant d'aller plus loin, je préfère partir de votre réalité que de la supposer :"
+Puis pose UNE question courte qui suit naturellement le P2 — sur ce que leur site leur apporte concrètement aujourd'hui (contacts, visibilité, conversions...).
 
 Signature (FIXE) : "${SIGNATURE}"
 `;
