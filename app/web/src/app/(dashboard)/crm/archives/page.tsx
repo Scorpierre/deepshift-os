@@ -46,9 +46,13 @@ export default function ArchivesPage() {
 
   async function deleteOne(id: string) {
     setDeleting((prev) => new Set(prev).add(id));
-    await fetch(`/api/prospects/${id}`, { method: "DELETE" });
-    setProspects((prev) => prev.filter((p) => p.id !== id));
-    setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    const res = await fetch(`/api/prospects/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      setProspects((prev) => prev.filter((p) => p.id !== id));
+      setSelected((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    } else {
+      alert("Erreur lors de la suppression. Réessaie.");
+    }
     setDeleting((prev) => { const s = new Set(prev); s.delete(id); return s; });
   }
 
@@ -56,11 +60,12 @@ export default function ArchivesPage() {
     if (selected.size === 0) return;
     setDeletingAll(true);
     try {
+      const ids = [...selected];
       const results = await Promise.allSettled(
-        [...selected].map((id) => fetch(`/api/prospects/${id}`, { method: "DELETE" }))
+        ids.map((id) => fetch(`/api/prospects/${id}`, { method: "DELETE" }).then(r => ({ id, ok: r.ok })))
       );
       const succeeded = new Set(
-        [...selected].filter((_, i) => results[i].status === "fulfilled")
+        results.flatMap(r => r.status === "fulfilled" && r.value.ok ? [r.value.id] : [])
       );
       setProspects((prev) => prev.filter((p) => !succeeded.has(p.id)));
       setSelected((prev) => {
@@ -68,7 +73,7 @@ export default function ArchivesPage() {
         succeeded.forEach((id) => s.delete(id));
         return s;
       });
-      const failed = results.filter((r) => r.status === "rejected").length;
+      const failed = ids.length - succeeded.size;
       if (failed > 0) alert(`${failed} suppression(s) ont échoué.`);
     } finally {
       setDeletingAll(false);

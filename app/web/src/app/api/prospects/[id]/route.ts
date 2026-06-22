@@ -91,6 +91,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 export async function DELETE(_request: NextRequest, { params }: Params) {
   const { id } = await params;
 
-  await prisma.prospect.delete({ where: { id } });
-  return NextResponse.json({ success: true });
+  try {
+    await prisma.prospect.delete({ where: { id } });
+    return NextResponse.json({ success: true });
+  } catch (err: unknown) {
+    const code = (err as { code?: string }).code;
+    if (code === "P2025") return NextResponse.json({ error: "Not found" }, { status: 404 });
+    console.error("[DELETE /api/prospects]", err);
+    return NextResponse.json({ error: "Erreur lors de la suppression" }, { status: 500 });
+  }
 }
