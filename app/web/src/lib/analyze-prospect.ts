@@ -1,7 +1,9 @@
+import Anthropic from "@anthropic-ai/sdk";
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
-import { scrapeUrl } from "@/lib/scrape";
 import { MODEL_SONNET } from "@/config";
+
+const WEB_FETCH_TOOL = { type: "web_fetch_20260209" } as unknown as Anthropic.Tool;
 
 export async function analyzeProspect(prospectId: string) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
@@ -10,41 +12,54 @@ export async function analyzeProspect(prospectId: string) {
   const url = prospect.websiteUrl ?? prospect.linkedinUrl;
   if (!url) { console.error("[analyzeProspect] no URL for prospect:", prospectId); return; }
 
-  console.log("[analyzeProspect] scraping:", url);
-  const scraped = await scrapeUrl(url);
-  console.log("[analyzeProspect] scrape result:", scraped ? `${scraped.length} chars` : "null");
   const isFacebook = url.includes("facebook.com") || url.includes("fb.com");
   const sourceLabel = isFacebook ? "page Facebook" : "site web";
-  const pageContent = scraped ?? "[Site inaccessible ou protégé — analyse basée sur les informations manuelles uniquement]";
 
-  const message = await anthropic.messages.create({
-    model: MODEL_SONNET,
-    max_tokens: 800,
-    messages: [{
-      role: "user",
-      content: `Tu analyses un prospect pour Pierre Connes (DeepShift) — développeur freelance solo qui crée des petits outils web sur mesure : formulaires intelligents, tableaux de bord internes, automatisations simples, sites vitrines. Pas de grosses plateformes, pas de CRM complexes, pas d'apps mobiles natives.
+  const userPrompt = `Tu analyses un prospect pour Pierre Connes (DeepShift) — développeur freelance solo qui crée des petits outils web sur mesure : formulaires intelligents, tableaux de bord internes, automatisations simples, sites vitrines. Pas de grosses plateformes, pas de CRM complexes, pas d'apps mobiles natives.
 
 Prospect :
 - Entreprise : ${prospect.company ?? prospect.name}
 - Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
 ${prospect.companyDescription ? `- Contexte : ${prospect.companyDescription}` : ""}
 
-Contenu brut de leur ${sourceLabel} (scraping HTML statique — les éléments chargés en JavaScript comme les filtres, menus dynamiques ou formulaires interactifs peuvent être absents) :
----
-${pageContent.slice(0, 3000)}
----
+Utilise web_fetch pour lire leur ${sourceLabel} : ${url}
 
-Génère une note terrain. Réponds UNIQUEMENT en JSON :
+Après avoir lu le contenu, génère une note terrain. Réponds UNIQUEMENT en JSON :
 {
   "company_summary": "2 phrases max : ce que fait cette structure, sa taille estimée, son contexte — déduit du site",
   "detected_sector": "secteur précis (ex: brasserie artisanale, cabinet vétérinaire, association sportive) — déduit du site",
-  "website_gap": "1 phrase sur un problème CERTAIN et visible dans le contenu scrappé (ex: aucun formulaire de contact, pas d'adresse ni de téléphone, site inaccessible, contenu très pauvre). Ne pas inférer l'absence d'éléments dynamiques (filtres, menus JS, etc.) qui peuvent exister sans apparaître dans le HTML statique. null si rien de certain.",
+  "website_gap": "1 phrase sur un problème réel observé sur le site (ex: aucun formulaire de contact, pas d'adresse, contenu très pauvre, site inaccessible). null si le site est fonctionnel.",
   "internal_pain": "1-2 phrases : raisonne depuis tes connaissances générales du secteur — PAS depuis le contenu du site. Pour une structure de ce type, quelle tâche interne répétitive est probablement encore gérée à la main ? Ex : suivi des stocks/commandes, gestion des plannings, saisie de devis, relances clients, rapports manuels... Reste dans le scope d'un outil simple."
-}`,
-    }],
-  });
+}`;
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
+  let messages: Anthropic.MessageParam[] = [{ role: "user", content: userPrompt }];
+  let raw = "{}";
+
+  for (let i = 0; i < 5; i++) {
+    const response = await anthropic.messages.create({
+      model: MODEL_SONNET,
+      max_tokens: 1500,
+      tools: [WEB_FETCH_TOOL],
+      messages,
+    });
+
+    console.log("[analyzeProspect] turn", i, "stop_reason:", response.stop_reason);
+
+    if (response.stop_reason === "end_turn") {
+      const textBlock = response.content.find(b => b.type === "text");
+      raw = textBlock?.type === "text" ? textBlock.text : "{}";
+      break;
+    }
+
+    if (response.stop_reason === "tool_use") {
+      messages.push({ role: "assistant", content: response.content });
+      const toolResults: Anthropic.ToolResultBlockParam[] = response.content
+        .filter((b): b is Anthropic.ToolUseBlock => b.type === "tool_use")
+        .map(b => ({ type: "tool_result", tool_use_id: b.id, content: "" }));
+      messages.push({ role: "user", content: toolResults });
+    }
+  }
+
   const match = raw.match(/\{[\s\S]*\}/);
   let parsed: {
     company_summary?: string;
