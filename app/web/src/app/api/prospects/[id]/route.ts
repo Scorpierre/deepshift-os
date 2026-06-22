@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { triggerN8nAnalysis } from "@/lib/n8n";
+import { analyzeProspect } from "@/lib/analyze-prospect";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -82,7 +82,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   // Re-déclenche n8n si une URL vient d'être ajoutée ou modifiée
   const urlChanged = body.websiteUrl !== undefined || body.linkedinUrl !== undefined;
   if (urlChanged && (prospect.websiteUrl || prospect.linkedinUrl)) {
-    triggerN8nAnalysis(prospect);
+    analyzeProspect(prospect.id).catch((err) => console.error("[PATCH /api/prospects] analyzeProspect failed:", err));
   }
 
   return NextResponse.json(prospect);

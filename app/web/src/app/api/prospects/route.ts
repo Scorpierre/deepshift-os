@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { ProspectStatus } from "@prisma/client";
 import { anthropic } from "@/lib/anthropic";
-import { triggerN8nAnalysis } from "@/lib/n8n";
+import { analyzeProspect } from "@/lib/analyze-prospect";
 import { parseAiJson } from "@/lib/parse-ai-json";
 import { MODEL_HAIKU } from "@/config";
 
@@ -143,7 +143,7 @@ Réponds UNIQUEMENT en JSON :
     });
 
     if (updated.websiteUrl || updated.linkedinUrl) {
-      triggerN8nAnalysis(updated);
+      analyzeProspect(updated.id).catch((err) => console.error("[scoreProspectAsync] analyzeProspect failed:", err));
     }
   } catch (err) {
     console.error("[scoreProspectAsync] scoring error for prospect", prospect.id, err);
