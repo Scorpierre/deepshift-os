@@ -482,18 +482,11 @@ export default function ProspectPage() {
 
   async function scoreProspect() {
     setScoring(true);
-    await Promise.all([
-      fetch("/api/ai/score", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prospectId: id }),
-      }),
-      fetch("/api/ai/analyze", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prospectId: id }),
-      }),
-    ]);
+    await fetch("/api/ai/score", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prospectId: id }),
+    });
     await load();
     setScoring(false);
   }
