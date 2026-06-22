@@ -22,12 +22,17 @@ async function getAccessToken(): Promise<string> {
 }
 
 /** Encode en base64url (requis par l'API Gmail) */
-function toBase64Url(str: string): string {
-  return Buffer.from(str)
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+function toBase64Url(buf: Buffer | string): string {
+  const b = typeof buf === "string" ? Buffer.from(buf, "utf-8") : buf;
+  return b.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** Encode un header MIME contenant des caractères non-ASCII (RFC 2047) */
+function encodeMimeHeader(value: string): string {
+  if (/[^\x00-\x7F]/.test(value)) {
+    return `=?UTF-8?B?${Buffer.from(value, "utf-8").toString("base64")}?=`;
+  }
+  return value;
 }
 
 /** Supprime les CRLF d'un header pour éviter l'injection */
@@ -47,17 +52,24 @@ function buildRawEmail({
 }): string {
   const from = process.env.GMAIL_FROM!;
   const senderName = sanitizeHeader(process.env.GMAIL_FROM_NAME ?? "Pierre Connes");
-  const mime = [
+
+  // Encode body as base64 within MIME to avoid any transport encoding ambiguity
+  const bodyB64 = Buffer.from(body, "utf-8").toString("base64").match(/.{1,76}/g)?.join("\r\n") ?? "";
+
+  const headers = [
     `From: ${senderName} <${sanitizeHeader(from)}>`,
     `To: ${sanitizeHeader(to)}`,
-    `Subject: ${sanitizeHeader(subject)}`,
+    `Subject: ${encodeMimeHeader(sanitizeHeader(subject))}`,
     `MIME-Version: 1.0`,
     `Content-Type: text/plain; charset=UTF-8`,
+    `Content-Transfer-Encoding: base64`,
+    `List-Unsubscribe: <mailto:${sanitizeHeader(from)}?subject=unsubscribe>`,
+    `List-Unsubscribe-Post: List-Unsubscribe=One-Click`,
     ``,
-    body,
+    bodyB64,
   ].join("\r\n");
 
-  return toBase64Url(mime);
+  return toBase64Url(Buffer.from(headers, "ascii"));
 }
 
 /** Extrait l'adresse email depuis un header "From" ("Nom Prénom <email@domain.com>") */
