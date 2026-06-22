@@ -1,6 +1,7 @@
 import { anthropic } from "@/lib/anthropic";
 import { prisma } from "@/lib/prisma";
 import { scrapeUrl } from "@/lib/scrape";
+import { MODEL_SONNET } from "@/config";
 
 export async function analyzeProspect(prospectId: string) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
@@ -15,7 +16,7 @@ export async function analyzeProspect(prospectId: string) {
   const pageContent = scraped ?? "[Site inaccessible ou protégé — analyse basée sur les informations manuelles uniquement]";
 
   const message = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: MODEL_SONNET,
     max_tokens: 800,
     messages: [{
       role: "user",
@@ -31,12 +32,12 @@ Contenu de leur ${sourceLabel} :
 ${pageContent.slice(0, 3000)}
 ---
 
-Génère une note terrain courte. Réponds UNIQUEMENT en JSON :
+Génère une note terrain. Réponds UNIQUEMENT en JSON :
 {
-  "company_summary": "2 phrases max : ce que fait cette structure, sa taille estimée, son contexte",
-  "internal_pain": "1-2 phrases : quelle tâche interne répétitive ou quel suivi manuel cette structure gère probablement encore à la main ? Reste dans le scope d'un outil simple (formulaire, tableau de bord, automatisation légère). Pas de CRM, pas d'app mobile, pas de billetterie complexe.",
-  "website_gap": "1 phrase : ce qui manque ou dysfonctionne sur leur site, ou null si le site est correct",
-  "detected_sector": "secteur précis (ex: aquarium, cabinet vétérinaire, association sportive)"
+  "company_summary": "2 phrases max : ce que fait cette structure, sa taille estimée, son contexte — déduit du site",
+  "detected_sector": "secteur précis (ex: brasserie artisanale, cabinet vétérinaire, association sportive) — déduit du site",
+  "website_gap": "1 phrase sur ce qui manque ou dysfonctionne sur leur site (navigation, lisibilité, absence de formulaire, manque d'infos clés...), ou null si le site est fonctionnel",
+  "internal_pain": "1-2 phrases : raisonne depuis tes connaissances générales du secteur — PAS depuis le contenu du site. Pour une structure de ce type, quelle tâche interne répétitive est probablement encore gérée à la main ? Ex : suivi des stocks/commandes, gestion des plannings, saisie de devis, relances clients, rapports manuels... Reste dans le scope d'un outil simple."
 }`,
     }],
   });
