@@ -1,4 +1,3 @@
-import { extractText } from "@/lib/html";
 import { SCRAPE_TIMEOUT_MS } from "@/config";
 
 const BLOCKED_HOSTNAMES = /^(localhost|127\.|0\.|10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/;
@@ -15,24 +14,31 @@ export function isSafeUrl(raw: string): boolean {
   }
 }
 
-/** Scrappe une URL externe et retourne le texte lisible, ou null si inaccessible/bloquée */
+/**
+ * Scrappe une URL via Jina Reader (r.jina.ai) qui rend le JS et retourne du Markdown propre.
+ * Retourne null si inaccessible ou bloquée.
+ */
 export async function scrapeUrl(url: string): Promise<string | null> {
   if (!isSafeUrl(url)) return null;
 
   try {
+    const jinaUrl = `https://r.jina.ai/${url}`;
+    const headers: Record<string, string> = {
+      "Accept": "text/markdown",
+      "X-Timeout": String(Math.floor(SCRAPE_TIMEOUT_MS / 1000)),
+    };
+    if (process.env.JINA_API_KEY) {
+      headers["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+    }
+
     const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), SCRAPE_TIMEOUT_MS);
-    const res = await fetch(url, {
-      signal: ctrl.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "fr-FR,fr;q=0.9",
-      },
-    });
+    const t = setTimeout(() => ctrl.abort(), SCRAPE_TIMEOUT_MS + 5000);
+    const res = await fetch(jinaUrl, { signal: ctrl.signal, headers });
     clearTimeout(t);
+
     if (!res.ok) return null;
-    return extractText(await res.text());
+    const text = await res.text();
+    return text.slice(0, 6000) || null;
   } catch {
     return null;
   }
