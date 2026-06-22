@@ -5,12 +5,14 @@ import { MODEL_SONNET } from "@/config";
 
 export async function analyzeProspect(prospectId: string) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
-  if (!prospect) return;
+  if (!prospect) { console.error("[analyzeProspect] prospect not found:", prospectId); return; }
 
   const url = prospect.websiteUrl ?? prospect.linkedinUrl;
-  if (!url) return;
+  if (!url) { console.error("[analyzeProspect] no URL for prospect:", prospectId); return; }
 
+  console.log("[analyzeProspect] scraping:", url);
   const scraped = await scrapeUrl(url);
+  console.log("[analyzeProspect] scrape result:", scraped ? `${scraped.length} chars` : "null");
   const isFacebook = url.includes("facebook.com") || url.includes("fb.com");
   const sourceLabel = isFacebook ? "page Facebook" : "site web";
   const pageContent = scraped ?? "[Site inaccessible ou protégé — analyse basée sur les informations manuelles uniquement]";
@@ -52,7 +54,8 @@ Génère une note terrain. Réponds UNIQUEMENT en JSON :
   } = {};
   try { parsed = JSON.parse(match?.[0] ?? "{}"); } catch { /* ignore */ }
 
-  if (!parsed.company_summary) return;
+  console.log("[analyzeProspect] parsed:", JSON.stringify(parsed).slice(0, 200));
+  if (!parsed.company_summary) { console.error("[analyzeProspect] no company_summary in response"); return; }
 
   const summaryText = [
     parsed.company_summary,
