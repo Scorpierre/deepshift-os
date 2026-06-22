@@ -9,7 +9,10 @@ export async function analyzeProspect(prospectId: string) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
   if (!prospect) { console.error("[analyzeProspect] prospect not found:", prospectId); return; }
 
-  const url = prospect.websiteUrl ?? prospect.linkedinUrl;
+  const emailDomain = prospect.email ? (() => {
+    try { return `https://${prospect.email.split("@")[1]}`; } catch { return null; }
+  })() : null;
+  const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? emailDomain;
   if (!url) { console.error("[analyzeProspect] no URL for prospect:", prospectId); return; }
 
   const isFacebook = url.includes("facebook.com") || url.includes("fb.com");
