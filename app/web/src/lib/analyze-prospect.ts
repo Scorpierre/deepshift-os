@@ -81,12 +81,12 @@ Réponds UNIQUEMENT en JSON :
   "recommended_action": "1 phrase : prochaine action commerciale concrète"
 }
 
-Barème du score (1-10, probabilité de conclure un contrat) :
-- 9-10 : Très fort potentiel, besoin clair et budget probable
-- 7-8 : Bon prospect, quelques inconnues
-- 5-6 : Potentiel moyen, à qualifier
-- 3-4 : Besoin flou ou budget insuffisant
-- 1-2 : Peu probable`;
+Barème du score (1-10) — contexte : Pierre fait du démarchage cold, donc budget et besoin exprimés sont TOUJOURS inconnus. Ne pas pénaliser pour ça. Score basé uniquement sur l'opportunité détectée :
+- 9-10 : Problème évident et coûteux à résoudre, structure de taille suffisante, outil de Pierre clairement adapté (ex: site inexistant pour un commerce actif, gestion critique encore sur papier)
+- 7-8 : Problème probable et bien identifiable, structure réceptive, opportunité réaliste
+- 5-6 : Opportunité possible mais floue ou secteur peu habitué aux outils numériques
+- 3-4 : Problème peu visible, structure trop petite ou déjà bien équipée
+- 1-2 : Aucune opportunité identifiable (administration rigide, déjà digitalisée, hors scope)`;
 
   let parsed: AnalysisResult = {};
   try {
@@ -113,7 +113,7 @@ Barème du score (1-10, probabilité de conclure un contrat) :
     : null;
 
   let status: ProspectStatus;
-  if (score !== null && score >= 8) status = "VIP" as ProspectStatus;
+  if (score !== null && score >= 9) status = "VIP" as ProspectStatus;
   else if (score !== null && score <= 3) status = "ARCHIVED" as ProspectStatus;
   else status = "SCORED" as ProspectStatus;
 
