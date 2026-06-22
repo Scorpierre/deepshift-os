@@ -29,7 +29,7 @@ Prospect :
 - Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
 ${prospect.companyDescription ? `- Contexte : ${prospect.companyDescription}` : ""}
 
-Contenu de leur ${sourceLabel} :
+Contenu brut de leur ${sourceLabel} (scraping HTML statique — les éléments chargés en JavaScript comme les filtres, menus dynamiques ou formulaires interactifs peuvent être absents) :
 ---
 ${pageContent.slice(0, 3000)}
 ---
@@ -38,7 +38,7 @@ Génère une note terrain. Réponds UNIQUEMENT en JSON :
 {
   "company_summary": "2 phrases max : ce que fait cette structure, sa taille estimée, son contexte — déduit du site",
   "detected_sector": "secteur précis (ex: brasserie artisanale, cabinet vétérinaire, association sportive) — déduit du site",
-  "website_gap": "1 phrase sur ce qui manque ou dysfonctionne sur leur site (navigation, lisibilité, absence de formulaire, manque d'infos clés...), ou null si le site est fonctionnel",
+  "website_gap": "1 phrase sur un problème CERTAIN et visible dans le contenu scrappé (ex: aucun formulaire de contact, pas d'adresse ni de téléphone, site inaccessible, contenu très pauvre). Ne pas inférer l'absence d'éléments dynamiques (filtres, menus JS, etc.) qui peuvent exister sans apparaître dans le HTML statique. null si rien de certain.",
   "internal_pain": "1-2 phrases : raisonne depuis tes connaissances générales du secteur — PAS depuis le contenu du site. Pour une structure de ce type, quelle tâche interne répétitive est probablement encore gérée à la main ? Ex : suivi des stocks/commandes, gestion des plannings, saisie de devis, relances clients, rapports manuels... Reste dans le scope d'un outil simple."
 }`,
     }],
