@@ -515,7 +515,7 @@ function NewProspectModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name.trim() || form.company.trim() || form.email.trim(),
+          name: form.name.trim(),
           email: form.email.trim(),
           company: form.company.trim() || null,
           phone: form.phone.trim() || null,

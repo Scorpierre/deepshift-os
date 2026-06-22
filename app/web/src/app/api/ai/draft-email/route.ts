@@ -11,8 +11,8 @@ export async function POST(request: NextRequest) {
   if (!prospect) return NextResponse.json({ error: "Prospect not found" }, { status: 404 });
 
   const NON_NAMES = new Set(["associe", "associé", "directeur", "directrice", "gérant", "gerant", "responsable", "contact", "propriétaire", "proprietaire", "manager", "patron", "président", "president", "fondateur", "cofondateur", "cogérant"]);
-  const rawFirst = prospect.name.trim().split(/\s+/)[0];
-  const firstName = NON_NAMES.has(rawFirst.toLowerCase()) ? null : rawFirst;
+  const rawFirst = prospect.name?.trim().split(/\s+/)[0] ?? "";
+  const firstName = !rawFirst || NON_NAMES.has(rawFirst.toLowerCase()) ? null : rawFirst;
 
   const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
   const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
