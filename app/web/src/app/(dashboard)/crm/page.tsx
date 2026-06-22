@@ -506,7 +506,6 @@ function NewProspectModal({
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const errs: typeof errors = {};
-    if (!form.name.trim()) errs.name = "Requis";
     if (!form.email.trim()) errs.email = "Requis";
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
@@ -516,7 +515,7 @@ function NewProspectModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: form.name.trim(),
+          name: form.name.trim() || form.company.trim() || form.email.trim(),
           email: form.email.trim(),
           company: form.company.trim() || null,
           phone: form.phone.trim() || null,
@@ -578,9 +577,9 @@ function NewProspectModal({
           <section className="flex flex-col gap-3">
             <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">Contact</p>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Nom *" error={errors.name}>
-                <input required value={form.name} onChange={(e) => set("name", e.target.value)}
-                  placeholder="Jean Dupont" className={input(errors.name)} />
+              <Field label="Prénom" error={errors.name}>
+                <input value={form.name} onChange={(e) => set("name", e.target.value)}
+                  placeholder="Jean (optionnel)" className={input(errors.name)} />
               </Field>
               <Field label="Entreprise">
                 <input value={form.company} onChange={(e) => set("company", e.target.value)}
