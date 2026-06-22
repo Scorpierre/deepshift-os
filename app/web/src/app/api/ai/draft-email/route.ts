@@ -32,11 +32,10 @@ export async function POST(request: NextRequest) {
     : aiAngle === "refonte" ? "refonte"
     : "gestion";
 
-  const companyContext = prospect.aiSummary
-    ? `Analyse du prospect :\n---\n${prospect.aiSummary}\n---`
-    : prospect.companyDescription
-    ? `Description :\n---\n${prospect.companyDescription}\n---`
-    : "";
+  const companyContext = [
+    prospect.aiSummary ? `Analyse IA du prospect :\n---\n${prospect.aiSummary}\n---` : "",
+    prospect.companyDescription ? `Contexte connu (ajouté manuellement) :\n---\n${prospect.companyDescription}\n---` : "",
+  ].filter(Boolean).join("\n\n");
 
   const prospectContext = [
     companyContext,
