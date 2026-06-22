@@ -15,6 +15,7 @@ type AnalysisResult = {
   website_gap?: string;
   internal_pain?: string;
   business_opportunity?: string;
+  primary_angle?: string;
 };
 
 /**
@@ -73,6 +74,7 @@ Réponds UNIQUEMENT en JSON :
   "website_gap": "1 phrase sur un problème réel observé sur le site (ex: aucun formulaire de contact, pas d'adresse, contenu très pauvre, pas de site). null si le site est fonctionnel.",
   "internal_pain": "1-2 phrases : le goulot d'étranglement lié au CŒUR DE MÉTIER (étapes 3-4). Pas de tâches génériques (secrétariat, réservations basiques). Vise ce que cette structure gère de spécifique à son activité principale.",
   "business_opportunity": "1 phrase : l'outil concret que Pierre pourrait construire pour résoudre internal_pain ou website_gap (étape 4). Ex : 'un tableau de bord de suivi des stocks par référence', 'un formulaire de réservation en ligne relié à un planning'.",
+  "primary_angle": "angle commercial prioritaire — UNE valeur exacte parmi : 'site' (pas de site ou Facebook uniquement), 'refonte' (site existant mais clairement défaillant : outdated, contenu manquant, erreurs, pas de menu/carte/tarifs consultables), 'gestion' (site fonctionnel, opportunité principale = outil interne). Si website_gap est significatif, choisir 'site' ou 'refonte' plutôt que 'gestion'.",
   "score": 7,
   "reason": "1-2 phrases justifiant le score (potentiel de signer un contrat avec Pierre, au regard de l'opportunité identifiée)",
   "tags": ["secteur", "taille", "type-de-besoin"],
@@ -129,7 +131,10 @@ Barème du score (1-10, probabilité de conclure un contrat) :
       status,
       score,
       aiScoreReason: parsed.reason ?? null,
-      aiTags: parsed.tags ?? [],
+      aiTags: [
+        ...(parsed.tags ?? []),
+        ...(parsed.primary_angle ? [`angle:${parsed.primary_angle}`] : []),
+      ],
       aiRecommendedAction: parsed.recommended_action ?? null,
       ...(summaryText ? { aiSummary: summaryText } : {}),
     },

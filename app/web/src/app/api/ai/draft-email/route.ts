@@ -20,9 +20,16 @@ export async function POST(request: NextRequest) {
   const needsApp = prospect.needType.some((n) => ["webapp", "api", "consulting", "autre"].includes(n));
   const needsSite = prospect.needType.includes("site") || prospect.needType.includes("ecommerce");
 
+  // Angle suggéré par l'analyse IA (stocké dans aiTags comme "angle:xxx")
+  const aiAngleTag = prospect.aiTags?.find((t: string) => t.startsWith("angle:"))?.replace("angle:", "");
+  const aiAngle = aiAngleTag === "site" || aiAngleTag === "refonte" || aiAngleTag === "gestion"
+    ? aiAngleTag : null;
+
   const angle: "web" | "refonte" | "gestion" =
     needsApp ? "gestion"
     : hasNoWebsite || needsSite ? "web"
+    : aiAngle === "site" ? "web"
+    : aiAngle === "refonte" ? "refonte"
     : "gestion";
 
   const companyContext = prospect.aiSummary
