@@ -12,15 +12,17 @@ type Intent =
   | "NEEDS_INFO"
   | "PROPOSAL_REQUESTED"
   | "LATER"
-  | "UNCLEAR";
+  | "UNCLEAR"
+  | "UNSUBSCRIBE";
 
 const INTENT_CONFIG: Record<Intent, { status?: string; tag: string; action?: string }> = {
-  INTERESTED:         { status: "QUALIFIED",     tag: "intéressé",      action: "Relancer rapidement — intérêt confirmé" },
-  NEEDS_INFO:         { status: "QUALIFIED",     tag: "besoin d'infos", action: "Répondre à ses questions" },
-  UNCLEAR:            { status: "QUALIFIED",     tag: "à clarifier",    action: "Appeler pour clarifier la réponse" },
-  PROPOSAL_REQUESTED: { status: "PROPOSAL_SENT", tag: "devis demandé",  action: "Envoyer le devis" },
+  INTERESTED:         { status: "QUALIFIED",     tag: "intéressé",              action: "Relancer rapidement — intérêt confirmé" },
+  NEEDS_INFO:         { status: "QUALIFIED",     tag: "besoin d'infos",         action: "Répondre à ses questions" },
+  UNCLEAR:            { status: "QUALIFIED",     tag: "à clarifier",            action: "Appeler pour clarifier la réponse" },
+  PROPOSAL_REQUESTED: { status: "PROPOSAL_SENT", tag: "devis demandé",          action: "Envoyer le devis" },
   LATER:              { status: "ARCHIVED",      tag: "plus tard" },
   NOT_INTERESTED:     { status: "ARCHIVED",      tag: "pas intéressé" },
+  UNSUBSCRIBE:        { status: "LOST",          tag: "stop — ne pas recontacter" },
 };
 
 const STATUS_ORDER = ["NEW", "CONTACTED", "QUALIFIED", "PROPOSAL_SENT", "NEGOTIATION", "WON"];
@@ -65,6 +67,7 @@ Détermine l'intent de ce prospect parmi :
 - NEEDS_INFO : pose des questions sur l'offre, demande des précisions
 - PROPOSAL_REQUESTED : demande un devis ou une proposition concrète
 - LATER : pas maintenant mais ouvre la porte plus tard ("rappelez-moi dans X", "recontactez-moi en Y")
+- UNSUBSCRIBE : demande explicite de ne plus être contacté — "stop", "désinscrivez-moi", "ne souhaitez plus être contacté", "ne pas recontacter", "retirez-moi de votre liste"
 - UNCLEAR : réponse vague, hors sujet, ou impossible à interpréter
 
 Si intent = LATER, extrais la date mentionnée (format ISO YYYY-MM-DD). Si pas de date précise, ajoute 3 mois à aujourd'hui (${new Date().toISOString().slice(0, 10)}).
@@ -75,7 +78,7 @@ Si le prospect propose ou confirme un nouveau RDV avec date et heure précises, 
 
 Réponds UNIQUEMENT en JSON :
 {
-  "intent": "INTERESTED|NOT_INTERESTED|NEEDS_INFO|PROPOSAL_REQUESTED|LATER|UNCLEAR",
+  "intent": "INTERESTED|NOT_INTERESTED|NEEDS_INFO|PROPOSAL_REQUESTED|LATER|UNSUBSCRIBE|UNCLEAR",
   "analysis": "1 phrase résumant la réponse du prospect",
   "laterDate": "YYYY-MM-DD ou null",
   "meetingDatetime": "YYYY-MM-DDTHH:mm:00 ou null",
@@ -155,8 +158,13 @@ export async function POST(request: NextRequest) {
       select: { id: true, meetingEventId: true, aiMeetingDate: true },
     });
 
+    // Fast-path : "stop" seul dans le body → pas besoin d'appel AI
+    const isExplicitStop = /^\s*stop\s*$/i.test(message.body.trim());
+
     const { intent, analysis, laterDate, meetingDatetime, meetingNote, meetingAction, newMeetingDatetime } =
-      await analyzeEmail(message.body, prospect.name, existingMeetingEmail?.aiMeetingDate?.toISOString());
+      isExplicitStop
+        ? { intent: "UNSUBSCRIBE" as Intent, analysis: "Le prospect a répondu 'stop'.", laterDate: undefined, meetingDatetime: undefined, meetingNote: undefined, meetingAction: null, newMeetingDatetime: undefined }
+        : await analyzeEmail(message.body, prospect.name, existingMeetingEmail?.aiMeetingDate?.toISOString());
 
     const config = INTENT_CONFIG[intent];
 
@@ -171,7 +179,11 @@ export async function POST(request: NextRequest) {
       lastContactedAt: new Date(),
       aiTags: updatedTags,
       ...(newStatus && { status: newStatus }),
-      ...(config.action && { aiRecommendedAction: config.action }),
+      ...(intent === "UNSUBSCRIBE"
+        ? { aiRecommendedAction: null, nextActionAt: null, nextActionNote: null }
+        : config.action
+        ? { aiRecommendedAction: config.action }
+        : {}),
       ...(intent === "LATER" && laterDate && {
         nextActionAt: new Date(laterDate),
         nextActionNote: `Relance suite réponse : ${analysis}`,
