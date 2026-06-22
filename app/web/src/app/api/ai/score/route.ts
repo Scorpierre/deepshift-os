@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 Prospect :
 - Nom : ${prospect.name}
 - Entreprise : ${prospect.company ?? "inconnue"}
-- Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
+${prospect.needType.length > 0 ? `- Besoin exprimé : ${prospect.needType.join(", ")}` : ""}
 - Source : ${prospect.source ?? "inconnue"}
 - Budget estimé : ${prospect.estimatedBudget ? `${prospect.estimatedBudget} €` : "inconnu"}
 ${prospect.companyDescription ? `- Description / contexte : ${prospect.companyDescription}` : ""}

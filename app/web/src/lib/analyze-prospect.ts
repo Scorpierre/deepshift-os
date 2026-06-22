@@ -19,7 +19,7 @@ export async function analyzeProspect(prospectId: string) {
 
 Prospect :
 - Entreprise : ${prospect.company ?? prospect.name}
-- Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
+${prospect.needType.length > 0 ? `- Besoin exprimé : ${prospect.needType.join(", ")}` : ""}
 ${prospect.companyDescription ? `- Contexte : ${prospect.companyDescription}` : ""}
 
 Utilise web_fetch pour lire leur ${sourceLabel} : ${url}

@@ -102,7 +102,7 @@ async function scoreProspectAsync(
 Prospect :
 - Nom : ${prospect.name}
 - Entreprise : ${prospect.company ?? "inconnue"}
-- Besoin exprimé : ${prospect.needType.join(", ") || "non précisé"}
+${prospect.needType.length > 0 ? `- Besoin exprimé : ${prospect.needType.join(", ")}` : ""}
 - Source : ${prospect.source ?? "inconnue"}
 - Budget estimé : ${prospect.estimatedBudget ? `${prospect.estimatedBudget} €` : "inconnu"}
 ${companyDescription ? `- Description / contexte : ${companyDescription}` : ""}
