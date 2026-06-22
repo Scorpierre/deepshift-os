@@ -10,7 +10,9 @@ export async function POST(request: NextRequest) {
   const prospect = await prisma.prospect.findUnique({ where: { id: prospectId } });
   if (!prospect) return NextResponse.json({ error: "Prospect not found" }, { status: 404 });
 
-  const firstName = prospect.name.trim().split(/\s+/)[0];
+  const NON_NAMES = new Set(["associe", "associé", "directeur", "directrice", "gérant", "gerant", "responsable", "contact", "propriétaire", "proprietaire", "manager", "patron", "président", "president", "fondateur", "cofondateur", "cogérant"]);
+  const rawFirst = prospect.name.trim().split(/\s+/)[0];
+  const firstName = NON_NAMES.has(rawFirst.toLowerCase()) ? null : rawFirst;
 
   const url = prospect.websiteUrl ?? prospect.linkedinUrl ?? null;
   const isFacebook = url ? (url.includes("facebook.com") || url.includes("fb.com")) : false;
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
   const angle: "web" | "refonte" | "gestion" =
     needsApp ? "gestion"
     : hasNoWebsite || needsSite ? "web"
-    : "refonte";
+    : "gestion";
 
   const companyContext = prospect.aiSummary
     ? `Analyse du prospect :\n---\n${prospect.aiSummary}\n---`
@@ -48,7 +50,7 @@ Identifie pour CE type de structure :
 
 ÉTAPE 2 — EMAIL (3 paragraphes, rien d'autre) :
 
-Salutation : "Bonjour ${firstName},"
+Salutation : "${firstName ? `Bonjour ${firstName},` : "Bonjour,"}"
 
 Paragraphe 1 :
 "Je conçois des outils de gestion simples pour les [type de structure précis] qui [contexte spécifique], là où [2-3 éléments concrets] finissent souvent éclatés entre plusieurs fichiers."
@@ -72,7 +74,7 @@ Identifie pour CE type de structure :
 
 ÉTAPE 2 — EMAIL (3 paragraphes) :
 
-Salutation : "Bonjour ${firstName},"
+Salutation : "${firstName ? `Bonjour ${firstName},` : "Bonjour,"}"
 
 Paragraphe 1 :
 "Je conçois des sites web simples pour les [type de structure] qui veulent être trouvés facilement en ligne, là où une page Facebook seule laisse souvent [ce que le client ne trouve pas] dans le flou."
@@ -96,7 +98,7 @@ Identifie :
 
 ÉTAPE 2 — EMAIL (3 paragraphes) :
 
-Salutation : "Bonjour ${firstName},"
+Salutation : "${firstName ? `Bonjour ${firstName},` : "Bonjour,"}"
 
 Paragraphe 1 :
 "Je travaille sur des sites et présences en ligne pour les [type de structure], là où [problème courant dans ce secteur] freine souvent les prises de contact directes."
