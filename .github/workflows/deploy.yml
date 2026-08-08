@@ -1,4 +1,4 @@
-name: Deploy to VM
+name: Deploy to Vercel
 
 on:
   push:
@@ -7,33 +7,31 @@ on:
 
 jobs:
   deploy:
-    name: Deploy → deepshift-vm
+    name: Deploy → Vercel + Supabase
     runs-on: ubuntu-latest
 
     steps:
-      - name: Write .env.production on VM
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cat > /opt/deepshift/repo/app/web/.env.production << 'ENVEOF'
-            ${{ secrets.ENV_PRODUCTION }}
-            ENVEOF
+      - uses: actions/checkout@v4
 
-      - name: SSH & deploy
-        uses: appleboy/ssh-action@v1
+      - uses: actions/setup-node@v4
         with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd /opt/deepshift/repo
-            git pull origin main
-            cd app/web
-            npm install
-            DATABASE_URL='${{ secrets.DATABASE_URL }}' npx prisma db push
-            docker compose build --no-cache
-            docker compose up -d
-            echo "✅ Deploy done at $(date)"
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: app/web
+
+      - name: Push schema → Supabase
+        run: npx prisma db push
+        working-directory: app/web
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DATABASE_URL }}
+
+      - name: Deploy → Vercel
+        run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        working-directory: app/web
+        env:
+          VERCEL_ORG_ID: team_ZW8aMXWeBdLMd9w5bJB3ZPmb
+          VERCEL_PROJECT_ID: prj_pmi0k7J2eXTQ2KLap5mNhVDcPhKo
