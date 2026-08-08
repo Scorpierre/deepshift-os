@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/prisma";
 import { analyzeProspect } from "@/lib/analyze-prospect";
 
@@ -82,7 +83,7 @@ export async function PATCH(request: NextRequest, { params }: Params) {
   // Re-déclenche n8n si une URL vient d'être ajoutée ou modifiée
   const urlChanged = body.websiteUrl !== undefined || body.linkedinUrl !== undefined;
   if (urlChanged && (prospect.websiteUrl || prospect.linkedinUrl)) {
-    analyzeProspect(prospect.id).catch((err) => console.error("[PATCH /api/prospects] analyzeProspect failed:", err));
+    waitUntil(analyzeProspect(prospect.id).catch((err) => console.error("[PATCH /api/prospects] analyzeProspect failed:", err)));
   }
 
   return NextResponse.json(prospect);

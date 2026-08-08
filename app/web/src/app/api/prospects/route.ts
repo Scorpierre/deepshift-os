@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { prisma } from "@/lib/prisma";
 import { ProspectStatus } from "@prisma/client";
 import { analyzeProspect } from "@/lib/analyze-prospect";
@@ -77,9 +78,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Erreur lors de la création du prospect." }, { status: 500 });
   }
 
-  // 2. Analyser en arrière-plan (fire & forget) — répondre 201 immédiatement
-  analyzeProspect(prospect.id).catch((err) =>
-    console.error("[POST /api/prospects] analyzeProspect failed:", err)
+  // 2. Analyser en arrière-plan — waitUntil garde la fonction en vie sur Vercel
+  waitUntil(
+    analyzeProspect(prospect.id).catch((err) =>
+      console.error("[POST /api/prospects] analyzeProspect failed:", err)
+    )
   );
 
   return NextResponse.json(prospect, { status: 201 });
