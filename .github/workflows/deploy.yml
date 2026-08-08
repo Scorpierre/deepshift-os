@@ -25,7 +25,6 @@ jobs:
 
       - name: Deploy → Vercel
         run: npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
-        working-directory: app/web
         env:
           VERCEL_ORG_ID: team_ZW8aMXWeBdLMd9w5bJB3ZPmb
           VERCEL_PROJECT_ID: prj_pmi0k7J2eXTQ2KLap5mNhVDcPhKo
