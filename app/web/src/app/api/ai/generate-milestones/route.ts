@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { anthropic } from "@/lib/anthropic";
 import { MODEL_SONNET, EMAIL_HISTORY_TAKE } from "@/config";
 
+export const maxDuration = 60;
+
 type GeneratedMilestone = {
   name: string;
   description: string;

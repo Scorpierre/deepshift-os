@@ -8,8 +8,10 @@ const J10 = 10 * 24 * 60 * 60 * 1000;
  * Condition : 3+ emails SENT, 0 email RECEIVED, dernier envoi >= J+10.
  * Appelé par n8n chaque matin (header x-n8n-secret requis).
  */
-export async function POST(req: NextRequest) {
-  if (req.headers.get("x-n8n-secret") !== process.env.N8N_WEBHOOK_SECRET) {
+export const maxDuration = 60;
+
+export async function GET(req: NextRequest) {
+  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

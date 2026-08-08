@@ -10,8 +10,10 @@ import { MODEL_SONNET } from "@/config";
  * Prend le prochain prospect SCORED (File 9h), génère un email avec Claude et l'envoie.
  * 1 prospect traité par déclenchement.
  */
-export async function POST(req: NextRequest) {
-  if (req.headers.get("x-n8n-secret") !== process.env.N8N_WEBHOOK_SECRET) {
+export const maxDuration = 60;
+
+export async function GET(req: NextRequest) {
+  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

@@ -111,9 +111,10 @@ Réponds UNIQUEMENT en JSON :
  * Appelé par n8n toutes les heures.
  * Scan inbox 2 derniers jours, associe aux prospects, analyse l'intent et met à jour les statuts.
  */
-export async function POST(request: NextRequest) {
-  const secret = request.headers.get("x-n8n-secret");
-  if (secret !== process.env.N8N_WEBHOOK_SECRET) {
+export const maxDuration = 60;
+
+export async function GET(request: NextRequest) {
+  if (request.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

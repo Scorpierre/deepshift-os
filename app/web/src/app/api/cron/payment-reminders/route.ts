@@ -11,8 +11,10 @@ const DAY = 24 * 60 * 60 * 1000;
  * - J+45 après échéance → relance ferme
  * Évite les doublons via PaymentReminder.
  */
-export async function POST(req: NextRequest) {
-  if (req.headers.get("x-n8n-secret") !== process.env.N8N_WEBHOOK_SECRET) {
+export const maxDuration = 60;
+
+export async function GET(req: NextRequest) {
+  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

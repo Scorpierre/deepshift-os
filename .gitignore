@@ -160,3 +160,4 @@ terraform.rc
 
 # Prisma generated client
 app/web/src/generated/
+.vercel

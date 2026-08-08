@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { sendEmail, applyLabel } from "@/lib/gmail";
 import { anthropic } from "@/lib/anthropic";
 import { parseAiJson } from "@/lib/parse-ai-json";
+
+export const maxDuration = 30;
 import { createCalendarEvent } from "@/lib/google-calendar";
 import { MODEL_HAIKU } from "@/config";
 

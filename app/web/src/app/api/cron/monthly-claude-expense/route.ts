@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 // Called by n8n on the 1st of each month — creates an Expense for last month's Claude API usage
-export async function POST(req: NextRequest) {
-  if (req.headers.get("x-n8n-secret") !== process.env.N8N_WEBHOOK_SECRET) {
+export const maxDuration = 30;
+
+export async function GET(req: NextRequest) {
+  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

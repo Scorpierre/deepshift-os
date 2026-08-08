@@ -11,8 +11,10 @@ import { MODEL_HAIKU, FOLLOWUP_J3_MS, FOLLOWUP_J7_MS, FOLLOWUP_J10_MS } from "@/
  * - Relance J+3 et J+7 : génère et envoie les emails de relance
  * - Auto-lost J+10 : passe en LOST les prospects sans réponse après 3 emails
  */
-export async function POST(req: NextRequest) {
-  if (req.headers.get("x-n8n-secret") !== process.env.N8N_WEBHOOK_SECRET) {
+export const maxDuration = 60;
+
+export async function GET(req: NextRequest) {
+  if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

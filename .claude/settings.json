@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__claude_ai_Notion__notion-create-pages",
+      "mcp__claude_ai_Notion__notion-update-page",
+      "mcp__claude_ai_Notion__notion-create-view",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/pierreconnes/.npm/bin/**)",
+      "Bash(npx claude *)",
+      "Bash(npx vercel *)"
+    ]
+  }
+}

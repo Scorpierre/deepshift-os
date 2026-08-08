@@ -24,7 +24,7 @@ export const anthropic = {
         console.log(
           `[claude] model=${params.model} in=${res.usage.input_tokens} out=${res.usage.output_tokens} cost=$${costUsd.toFixed(6)}`
         );
-        prisma.aiUsageLog
+        await prisma.aiUsageLog
           .create({
             data: {
               model: params.model,
