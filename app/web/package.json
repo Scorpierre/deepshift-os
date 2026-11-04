@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "seed:demo": "npx tsx scripts/seed-demo.ts",
+    "seed:demo:extra": "npx tsx scripts/seed-demo-extra.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

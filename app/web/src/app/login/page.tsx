@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2, Lock } from "lucide-react";
 
 export default function LoginPage() {
   const [password, setPassword] = useState("");
@@ -31,34 +32,38 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8">
-          <p className="text-xs font-mono text-muted-foreground uppercase tracking-widest mb-2">
-            DeepShift OS
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Connexion</h1>
+      <div className="w-full max-w-sm surface p-8">
+        <div className="mb-8 flex flex-col items-center text-center">
+          <div className="size-12 rounded-xl bg-gradient-to-br from-primary to-violet-400 grid place-items-center text-lg font-bold text-white shadow-lg shadow-primary/30 mb-4">
+            D
+          </div>
+          <h1 className="text-xl font-semibold tracking-tight">DeepShift OS</h1>
+          <p className="text-sm text-muted-foreground mt-1">Connectez-vous pour continuer</p>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="Mot de passe"
-            autoFocus
-            required
-            className="w-full rounded-lg border border-border bg-card px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-ring"
-          />
+          <div className="relative">
+            <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mot de passe"
+              autoFocus
+              required
+              aria-invalid={!!error}
+              className="w-full rounded-xl border border-border bg-muted/30 pl-9 pr-4 py-2.5 text-sm outline-none focus:border-primary/60 placeholder:text-muted-foreground/50"
+            />
+          </div>
 
-          {error && (
-            <p className="text-xs text-red-400">{error}</p>
-          )}
+          {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-foreground text-background px-4 py-2.5 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="flex items-center justify-center gap-2 rounded-xl bg-primary text-primary-foreground px-4 py-2.5 text-sm font-medium hover:brightness-110 disabled:opacity-50 transition-all shadow-lg shadow-primary/20"
           >
+            {loading && <Loader2 size={14} className="animate-spin" />}
             {loading ? "Vérification…" : "Entrer"}
           </button>
         </form>

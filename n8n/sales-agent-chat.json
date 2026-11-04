@@ -1,0 +1,110 @@
+{
+  "id": "deepshiftSalesAgent1",
+  "name": "DeepShift — Agent Sales (chat)",
+  "nodes": [
+    {
+      "parameters": {
+        "options": {
+          "title": "Agent Sales DeepShift",
+          "subtitle": "Pose une question sur ton pipeline"
+        },
+        "public": true,
+        "authentication": "none"
+      },
+      "name": "Chat",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "deepshift-sales-agent"
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "Tu es l'agent Sales de DeepShift (web apps sur mesure). Pour toute question sur l'activité récente, le pipeline, les relances ou les projets, appelle l'outil crm_weekly_summary, puis réponds en français, de façon concise et actionnable, en te basant uniquement sur ses données."
+        }
+      },
+      "name": "Agent Sales",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "claude-haiku-4-5-20251001",
+          "mode": "id"
+        },
+        "options": {
+          "maxTokensToSample": 1024
+        }
+      },
+      "name": "Claude Haiku",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        220,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "toolDescription": "Résumé de la semaine du CRM DeepShift : prospects mis à jour, relances en retard, CA du mois, factures en attente, projets actifs et jalons à venir.",
+        "method": "POST",
+        "url": "http://host.docker.internal:3000/api/ai/weekly-summary"
+      },
+      "name": "crm_weekly_summary",
+      "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
+      "typeVersion": 1.1,
+      "position": [
+        460,
+        220
+      ]
+    }
+  ],
+  "connections": {
+    "Chat": {
+      "main": [
+        [
+          {
+            "node": "Agent Sales",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude Haiku": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Agent Sales",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "crm_weekly_summary": {
+      "ai_tool": [
+        [
+          {
+            "node": "Agent Sales",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

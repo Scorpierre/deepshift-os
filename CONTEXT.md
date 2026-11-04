@@ -14,7 +14,7 @@ Deux choses en parallèle :
 Auto-entreprise de services IT : web apps sur mesure, sites, intégrations API, consulting transformation digitale.
 
 ### 2. DeepShift OS — l'outil interne
-Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entreprise. Pas de Notion, pas de Zapier, pas d'outils tiers payants — tout custom, tout IA, tout automatisé.
+Une **web app interne** qui gère 100% de l'entreprise, hébergée sur Vercel (app) + Supabase (PostgreSQL) — n8n reste self-hosted sur la VM Azure pour l'orchestration des workflows. Pas de Notion, pas de Zapier, pas d'outils tiers payants côté métier — tout custom, tout IA, tout automatisé.
 
 #### Les 5 modules
 
@@ -39,20 +39,25 @@ Une **web app interne** hébergée sur mon VPS Azure qui gère 100% de l'entrepr
 | Couche | Techno |
 |--------|--------|
 | Frontend + Backend | Next.js 15 (App Router) + TypeScript |
-| Base de données | PostgreSQL 16 |
-| ORM | Prisma |
+| Base de données | PostgreSQL 16 (Supabase) |
+| ORM | Prisma 7 (`db push`) |
 | UI | shadcn/ui + Tailwind |
 | IA | Claude API (Anthropic) — embarqué dans l'app |
-| Automatisation | n8n (self-hosted sur le VPS) |
+| Automatisation | n8n (self-hosted sur VM Azure) |
 | Email | Gmail API (compte gratuit pour démarrer) |
 | Calendrier | Google Calendar API |
 | Transcription appels | Granola (optionnel, ~15€/mois) |
-| Hébergement | Microsoft Azure — VM `Standard_D2s_v3` (2 vCPU, 8GB RAM) |
+| Hébergement app | Vercel |
+| Hébergement n8n | Microsoft Azure — VM `Standard_D2s_v3` (2 vCPU, 8GB RAM) |
 | Versionning | GitHub — `github.com/Scorpierre/deepshift-os` |
+
+> **Migration (2026-08)** : l'app Next.js et la base de données ont quitté la VM Azure pour Vercel + Supabase (coûts serveur réduits, déploiement simplifié). n8n reste sur la VM Azure et déclenche les crons métier (`/api/cron/*`) par webhook — `vercel.json` n'a donc pas de crons natifs, ils seraient redondants.
 
 ---
 
-## Infrastructure Azure
+## Infrastructure Azure (n8n uniquement)
+
+> L'app Next.js et PostgreSQL ne sont plus sur cette VM — voir section Vercel + Supabase ci-dessous. La VM Azure reste active uniquement pour héberger n8n (et le suivi des coûts Azure via l'API Cost Management).
 
 - **Cloud** : Microsoft Azure — crédits 100$ pour 1 an
 - **VM** : `Standard_D2s_v3` — Ubuntu 24.04 LTS — 2 vCPU / 8GB RAM
@@ -81,8 +86,14 @@ ssh -i ~/.ssh/id_ed25519 deepshift@<VM_PUBLIC_IP>
 | Service | URL | Statut |
 |---------|-----|--------|
 | n8n | http://<VM_PUBLIC_IP>:5678 | ✅ UP |
-| PostgreSQL | port 5432 (interne) | ✅ UP |
-| Next.js | http://<VM_PUBLIC_IP>:3000 | ⬜ pas encore déployé |
+
+---
+
+## Infrastructure Vercel + Supabase (app)
+
+- **App Next.js** : projet Vercel `deepshift` — déploiement auto sur push `main`
+- **Base de données** : Supabase (PostgreSQL 16) — connexion via pooler (`@prisma/adapter-pg` + `pg`)
+- **Migrations** : `prisma db push` (pas de migrations versionnées)
 
 ---
 
@@ -92,11 +103,11 @@ ssh -i ~/.ssh/id_ed25519 deepshift@<VM_PUBLIC_IP>
 - **Branches** : `main` (prod) · `dev` (travail quotidien) · `feature/*` (fonctionnalités)
 - **Workflow Git** :
   ```
-  feature/xxx  →  dev  →  PR  →  main  →  auto-deploy VM
+  feature/xxx  →  dev  →  PR  →  main  →  auto-deploy Vercel
   ```
 - **CI** : GitHub Actions — typecheck + lint + build sur chaque PR vers `main` ou `dev`
-- **Deploy** : push sur `main` → SSH → `docker compose up --build` sur la VM
-- **Secrets GitHub** : `VM_HOST`, `VM_USER`, `SSH_PRIVATE_KEY` configurés
+- **Deploy** : push sur `main` → GitHub Actions → `vercel --prod` (`deploy.yml`)
+- **Secrets GitHub** : `VERCEL_TOKEN` configuré (org `team_ZW8aMXWeBdLMd9w5bJB3ZPmb`, projet `deepshift`)
 - **Règle** : ne jamais pusher directement sur `main`
 
 ---
@@ -105,12 +116,13 @@ ssh -i ~/.ssh/id_ed25519 deepshift@<VM_PUBLIC_IP>
 
 | Outil | Coût |
 |-------|------|
-| Azure VM D2s_v3 | ~70$/mois en continu — éteindre quand pas utilisé |
-| n8n self-hosted | 0€ |
+| Vercel (app Next.js) | 0€ (plan Hobby) |
+| Supabase (PostgreSQL) | 0€ (plan Free) |
+| Azure VM D2s_v3 (n8n uniquement) | ~70$/mois en continu — éteindre quand pas utilisé |
 | Claude API (workflows n8n) | ~5-10€ |
 | Gmail | 0€ |
 | Granola (optionnel) | ~15€ |
-| **Total actif** | **~10-25€/mois** |
+| **Total actif** | **~5-25€/mois** (objectif : migrer n8n hors Azure pour tomber sous ~10€/mois) |
 
 > Claude Pro (abonnement perso) et Claude API (pour n8n) sont deux choses séparées.
 > Le Pro = ce chat + Claude Code. L'API = les appels depuis n8n, facturation à la consommation.
@@ -130,25 +142,29 @@ ssh -i ~/.ssh/id_ed25519 deepshift@<VM_PUBLIC_IP>
 
 ---
 
-## Où on en est (2026-03-25)
+## Où on en est (2026-08-15)
 
-- [x] Setup Azure VM + Terraform (`app/cloud/main.tf`)
-- [x] Firewall Azure (ports 22, 80, 443, 5678, 3000)
+- [x] Setup Azure VM + Terraform (`app/cloud/main.tf`) — n8n uniquement désormais
 - [x] Connexion SSH + Docker installé
 - [x] n8n lancé via Docker Compose + compte admin créé
-- [x] PostgreSQL lancé via Docker Compose
+- [x] Migration app + BDD vers Vercel + Supabase (2026-08)
 - [x] Repo GitHub créé + branches `main` / `dev`
-- [x] CI/CD GitHub Actions configuré (`.github/workflows/`)
-- [ ] Scaffolding Next.js 15 + TypeScript + Prisma + PostgreSQL
-- [ ] shadcn/ui configuré
-- [ ] Credentials configurés (Claude API, Gmail OAuth, GitHub webhooks)
-- [ ] Module CRM — V1
-- [ ] Module Projets — V1
-- [ ] Module Finance — V1
-- [ ] Module Interne — V1
-- [ ] Module Agenda + IA centrale — V1
-- [ ] Workflows n8n (prospection, relances, devis, onboarding, facturation)
+- [x] CI/CD GitHub Actions configuré (`.github/workflows/`) — deploy Vercel
+- [x] Scaffolding Next.js 15 + TypeScript + Prisma + PostgreSQL
+- [x] shadcn/ui configuré
+- [x] Credentials configurés (Claude API, Gmail OAuth)
+- [x] Module CRM — V1
+- [x] Module Agenda — V1 (Google Calendar + Tasks, lifecycle meeting)
+- [x] Module Projets — V1
+- [x] Module Clients — V1
+- [x] Module Finance — V1
+- [x] Module Admin — V1 (charges, abonnements, weekly review manuelle, usage IA)
+- [ ] Module IA centrale — chat interne Claude (prochain module prioritaire)
+- [ ] Notifications push/email centralisées
+- [ ] Workflows n8n restants (devis, onboarding client, weekly review automatique)
 - [ ] Granola intégré (optionnel)
+
+> Détail module par module : voir [SUIVI.md](SUIVI.md).
 
 ---
 

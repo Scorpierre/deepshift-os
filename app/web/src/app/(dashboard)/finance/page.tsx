@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  AlertTriangle, ArrowRight, Check, Euro,
-  FileText, Loader2, Plus, Receipt, Send, Trash2, TrendingUp, X,
+  AlertTriangle, ArrowRight, Check,
+  FileText, Loader2, Plus, Receipt, Search, Send, Trash2, TrendingUp, X,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -252,139 +252,233 @@ function QuoteModal({ onClose, onCreated }: { onClose: () => void; onCreated: ()
   );
 }
 
-// ─── Dashboard CA ─────────────────────────────────────────────────────────────
+// ─── Primitives ───────────────────────────────────────────────────────────────
 
-function DashboardTab({ stats }: { stats: Stats | null }) {
-  if (!stats) return <div className="flex items-center justify-center py-20"><Loader2 size={20} className="animate-spin text-muted-foreground" /></div>;
+const eur0 = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits: 0 }) + " €";
 
-  const cards = [
-    { label: "CA ce mois", value: `${fmt(stats.caMonth)} €`, icon: TrendingUp, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
-    { label: "CA cette année", value: `${fmt(stats.caYear)} €`, icon: TrendingUp, color: "text-blue-400", bg: "bg-blue-500/10 border-blue-500/20" },
-    { label: "CA total", value: `${fmt(stats.caTotal)} €`, icon: Euro, color: "text-violet-400", bg: "bg-violet-500/10 border-violet-500/20" },
-    { label: "Devis en attente", value: String(stats.pendingQuotes), icon: FileText, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
-    { label: "À encaisser", value: `${fmt(stats.pendingInvoicesAmount)} €`, icon: Receipt, color: "text-orange-400", bg: "bg-orange-500/10 border-orange-500/20", sub: `${stats.pendingInvoicesCount} facture${stats.pendingInvoicesCount !== 1 ? "s" : ""}` },
-    { label: "En retard", value: String(stats.overdueInvoices), icon: AlertTriangle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
-  ];
+const QUOTE_DOT: Record<QuoteStatus, string> = { DRAFT: "bg-zinc-400", SENT: "bg-blue-400", ACCEPTED: "bg-emerald-400", REJECTED: "bg-red-400", EXPIRED: "bg-amber-400" };
+const INVOICE_DOT: Record<InvoiceStatus, string> = { PENDING: "bg-amber-400", PAID: "bg-emerald-400", OVERDUE: "bg-red-400", CANCELLED: "bg-zinc-500" };
 
+function Pill({ cls, dot, children }: { cls: string; dot: string; children: React.ReactNode }) {
   return (
-    <div className="p-6">
-      <div className="grid grid-cols-3 gap-4 max-w-3xl">
-        {cards.map((card) => (
-          <div key={card.label} className={`border rounded-2xl p-4 space-y-2 ${card.bg}`}>
-            <div className="flex items-center gap-2">
-              <card.icon size={14} className={card.color} />
-              <span className="text-[11px] text-muted-foreground uppercase tracking-wide">{card.label}</span>
-            </div>
-            <p className={`text-2xl font-bold ${card.color}`}>{card.value}</p>
-            {"sub" in card && card.sub && <p className="text-xs text-muted-foreground">{card.sub}</p>}
-          </div>
-        ))}
-      </div>
-    </div>
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full border whitespace-nowrap ${cls}`}>
+      <span className={`size-1.5 rounded-full ${dot}`} />{children}
+    </span>
   );
 }
 
-// ─── Onglet Devis ─────────────────────────────────────────────────────────────
+function clientName(p: ProspectRef) {
+  return p.company ?? p.name;
+}
 
-function QuotesTab({ quotes, onRefresh }: { quotes: Quote[]; onRefresh: () => void }) {
-  const [sending, setSending] = useState<string | null>(null);
-  const [accepting, setAccepting] = useState<string | null>(null);
-  const [deleting, setDeleting] = useState<string | null>(null);
+function daysUntil(d: string) {
+  return Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
+}
 
-  async function sendQuote(id: string) {
-    setSending(id);
-    await fetch(`/api/quotes/${id}/send`, { method: "POST" });
-    onRefresh();
-    setSending(null);
-  }
-
-  async function acceptQuote(id: string) {
-    setAccepting(id);
-    await fetch(`/api/quotes/${id}/accept`, { method: "POST" });
-    onRefresh();
-    setAccepting(null);
-  }
-
-  async function deleteQuote(id: string) {
-    setDeleting(id);
-    await fetch(`/api/quotes/${id}`, { method: "DELETE" });
-    onRefresh();
-    setDeleting(null);
-  }
-
-  if (quotes.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/40 gap-2">
-        <FileText size={32} strokeWidth={1.5} />
-        <p className="text-sm">Aucun devis pour l'instant.</p>
-      </div>
-    );
-  }
-
+function Segmented<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: { key: T; label: string; count: number }[] }) {
   return (
-    <div className="divide-y divide-border">
-      {quotes.map((q) => (
-        <div key={q.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/20 transition-colors">
-          <div className="flex-1 min-w-0 space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-mono">{q.number}</span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${QUOTE_STATUS_COLORS[q.status]}`}>
-                {QUOTE_STATUS_LABELS[q.status]}
-              </span>
-            </div>
-            <p className="text-sm font-medium truncate">{q.title}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {q.prospect.name}{q.prospect.company ? ` — ${q.prospect.company}` : ""}
-              {q.validUntil ? ` · valable jusqu'au ${fmtDate(q.validUntil)}` : ""}
-            </p>
-          </div>
-
-          <div className="text-right shrink-0">
-            <p className="text-sm font-semibold">{fmt(q.totalHT)} €</p>
-            <p className="text-[10px] text-muted-foreground">HT</p>
-          </div>
-
-          <div className="flex items-center gap-1.5 shrink-0">
-            {q.status === "DRAFT" && (
-              <button
-                onClick={() => sendQuote(q.id)}
-                disabled={sending === q.id}
-                className="flex items-center gap-1 text-xs bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 disabled:opacity-50 px-2.5 py-1.5 rounded-lg transition-colors"
-              >
-                {sending === q.id ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}
-                Envoyer
-              </button>
-            )}
-            {q.status === "SENT" && !q.invoice && (
-              <button
-                onClick={() => acceptQuote(q.id)}
-                disabled={accepting === q.id}
-                className="flex items-center gap-1 text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50 px-2.5 py-1.5 rounded-lg transition-colors"
-              >
-                {accepting === q.id ? <Loader2 size={10} className="animate-spin" /> : <ArrowRight size={10} />}
-                Facturer
-              </button>
-            )}
-            {["DRAFT", "REJECTED", "EXPIRED"].includes(q.status) && (
-              <button
-                onClick={() => deleteQuote(q.id)}
-                disabled={deleting === q.id}
-                className="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
-              >
-                {deleting === q.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-              </button>
-            )}
-          </div>
-        </div>
+    <div className="flex items-center gap-1 p-1 rounded-lg bg-muted/40 border border-border w-fit">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={`px-3 py-1.5 text-xs rounded-md transition-colors flex items-center gap-1.5 ${value === o.key ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          {o.label}<span className="text-[10px] tabular-nums text-muted-foreground/60">{o.count}</span>
+        </button>
       ))}
     </div>
   );
 }
 
-// ─── Onglet Factures ──────────────────────────────────────────────────────────
+function SearchBox({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="relative w-full max-w-xs">
+      <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60" />
+      <input
+        value={value} onChange={(e) => onChange(e.target.value)} placeholder="Client, numéro, objet…"
+        className="w-full text-sm bg-muted/30 border border-border rounded-lg pl-8 pr-3 py-2 outline-none focus:border-primary/40 placeholder:text-muted-foreground/40"
+      />
+    </div>
+  );
+}
+
+function EmptyState({ icon: Icon, text }: { icon: React.ElementType; text: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/50 gap-2 rounded-xl border border-dashed border-border">
+      <Icon size={32} strokeWidth={1.5} /><p className="text-sm">{text}</p>
+    </div>
+  );
+}
+
+const TH = "px-4 py-2.5 text-[10px] uppercase tracking-wider font-medium text-muted-foreground/60 text-left";
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
+function DashboardTab({ stats, quotes, invoices, goTo }: { stats: Stats | null; quotes: Quote[]; invoices: Invoice[]; goTo: (t: Tab) => void }) {
+  if (!stats) return <div className="flex items-center justify-center py-20"><Loader2 size={20} className="animate-spin text-muted-foreground" /></div>;
+
+  const overdue = invoices.filter((i) => i.status === "OVERDUE");
+  const drafts = quotes.filter((q) => q.status === "DRAFT");
+  const awaiting = quotes.filter((q) => q.status === "SENT" && !q.invoice);
+  const monthShare = stats.caYear > 0 ? Math.min(100, Math.round((stats.caMonth / stats.caYear) * 100)) : 0;
+
+  const todo = [
+    ...overdue.map((i) => ({ key: i.id, tone: "bg-red-500/15 text-red-300", icon: AlertTriangle, title: `${i.number} en retard`, sub: `${clientName(i.prospect)} · échue le ${fmtDate(i.dueAt)}`, amount: i.totalHT, tab: "invoices" as Tab })),
+    ...awaiting.map((q) => ({ key: q.id, tone: "bg-blue-500/15 text-blue-300", icon: Send, title: `${q.number} sans réponse`, sub: `${clientName(q.prospect)} · envoyé le ${fmtDate(q.sentAt)}`, amount: q.totalHT, tab: "quotes" as Tab })),
+    ...drafts.map((q) => ({ key: q.id, tone: "bg-zinc-500/15 text-zinc-300", icon: FileText, title: `${q.number} à finaliser`, sub: `${clientName(q.prospect)} · brouillon`, amount: q.totalHT, tab: "quotes" as Tab })),
+  ];
+
+  return (
+    <div className="px-6 py-5 space-y-5 max-w-[1200px] mx-auto">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2 relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 via-card to-card p-6">
+          <p className="text-xs text-muted-foreground flex items-center gap-1.5"><TrendingUp size={13} className="text-emerald-400" />Chiffre d'affaires du mois</p>
+          <p className="text-4xl font-semibold tracking-tight tabular-nums mt-2">{eur0(stats.caMonth)}</p>
+          <div className="mt-5 space-y-1.5">
+            <div className="h-1.5 rounded-full bg-muted/60 overflow-hidden"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${monthShare}%` }} /></div>
+            <p className="text-[11px] text-muted-foreground">{monthShare}% du CA annuel ({eur0(stats.caYear)}) · CA total {eur0(stats.caTotal)}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-1 gap-4">
+          <div className="rounded-2xl border border-border bg-card/60 p-4">
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5"><Receipt size={13} className="text-amber-400" />À encaisser</p>
+            <p className="text-2xl font-semibold tabular-nums mt-1">{eur0(stats.pendingInvoicesAmount)}</p>
+            <p className="text-[11px] text-muted-foreground">{stats.pendingInvoicesCount} facture{stats.pendingInvoicesCount !== 1 ? "s" : ""}</p>
+          </div>
+          <div className={`rounded-2xl border p-4 ${stats.overdueInvoices ? "border-red-500/25 bg-red-500/5" : "border-border bg-card/60"}`}>
+            <p className="text-xs text-muted-foreground flex items-center gap-1.5"><AlertTriangle size={13} className={stats.overdueInvoices ? "text-red-400" : "text-emerald-400"} />En retard</p>
+            <p className="text-2xl font-semibold tabular-nums mt-1">{stats.overdueInvoices}</p>
+            <p className="text-[11px] text-muted-foreground">{stats.pendingQuotes} devis en attente</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-card/60 overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-border flex items-center justify-between">
+          <h2 className="text-sm font-medium">À traiter</h2>
+          <span className="text-[11px] text-muted-foreground">{todo.length} action{todo.length !== 1 ? "s" : ""}</span>
+        </div>
+        {todo.length === 0 ? (
+          <p className="p-8 text-center text-sm text-muted-foreground/60">Tout est à jour 🎉</p>
+        ) : (
+          <ul className="divide-y divide-border/70">
+            {todo.map((t) => (
+              <li key={t.key}>
+                <button onClick={() => goTo(t.tab)} className="w-full flex items-center gap-3 px-5 py-3 text-left hover:bg-muted/30 transition-colors">
+                  <span className={`size-8 rounded-lg grid place-items-center shrink-0 ${t.tone}`}><t.icon size={14} /></span>
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium truncate">{t.title}</span>
+                    <span className="block text-[11px] text-muted-foreground truncate">{t.sub}</span>
+                  </span>
+                  <span className="text-sm tabular-nums">{eur0(t.amount)}</span>
+                  <ArrowRight size={13} className="text-muted-foreground/40" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Devis ────────────────────────────────────────────────────────────────────
+
+type QuoteFilter = "all" | "DRAFT" | "SENT" | "ACCEPTED" | "closed";
+
+function QuotesTab({ quotes, onRefresh }: { quotes: Quote[]; onRefresh: () => void }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [filter, setFilter] = useState<QuoteFilter>("all");
+  const [query, setQuery] = useState("");
+
+  async function act(id: string, path: string, method = "POST") {
+    setBusy(id + path);
+    await fetch(`/api/quotes/${id}${path}`, { method });
+    onRefresh();
+    setBusy(null);
+  }
+
+  const match = (f: QuoteFilter, q: Quote) => f === "all" || (f === "closed" ? ["REJECTED", "EXPIRED"].includes(q.status) : q.status === f);
+  const options = ([["all", "Tous"], ["DRAFT", "Brouillons"], ["SENT", "Envoyés"], ["ACCEPTED", "Acceptés"], ["closed", "Clos"]] as const)
+    .map(([key, label]) => ({ key, label, count: quotes.filter((q) => match(key, q)).length }));
+
+  const rows = useMemo(() => {
+    const s = query.trim().toLowerCase();
+    return quotes.filter((q) => match(filter, q) && (!s || `${q.number} ${q.title} ${q.prospect.name} ${q.prospect.company ?? ""}`.toLowerCase().includes(s)));
+  }, [quotes, filter, query]);
+
+  const open = quotes.filter((q) => q.status === "SENT").reduce((s, q) => s + q.totalHT, 0);
+
+  return (
+    <div className="px-6 py-5 space-y-4 max-w-[1200px] mx-auto">
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented value={filter} onChange={setFilter} options={options} />
+        <SearchBox value={query} onChange={setQuery} />
+        <p className="ml-auto text-xs text-muted-foreground">En attente de réponse : <span className="text-foreground font-medium tabular-nums">{eur0(open)}</span></p>
+      </div>
+
+      {rows.length === 0 ? <EmptyState icon={FileText} text="Aucun devis." /> : (
+        <div className="rounded-xl border border-border bg-card/60 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-border">
+              <th className={TH}>Devis</th><th className={TH}>Client</th><th className={TH}>Statut</th>
+              <th className={`${TH} max-md:hidden`}>Validité</th><th className={`${TH} text-right`}>Montant HT</th><th className={TH} />
+            </tr></thead>
+            <tbody className="divide-y divide-border/70">
+              {rows.map((q) => {
+                const left = q.validUntil ? daysUntil(q.validUntil) : null;
+                return (
+                  <tr key={q.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium truncate max-w-64">{q.title}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">{q.number}</p>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{clientName(q.prospect)}</td>
+                    <td className="px-4 py-3"><Pill cls={QUOTE_STATUS_COLORS[q.status]} dot={QUOTE_DOT[q.status]}>{QUOTE_STATUS_LABELS[q.status]}</Pill></td>
+                    <td className="px-4 py-3 text-xs max-md:hidden">
+                      {q.validUntil ? <span className={left !== null && left < 0 ? "text-red-400" : left !== null && left <= 5 ? "text-amber-400" : "text-muted-foreground"}>{fmtDate(q.validUntil)}</span> : <span className="text-muted-foreground/40">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums whitespace-nowrap">{fmt(q.totalHT)} €</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {q.status === "DRAFT" && (
+                          <button onClick={() => act(q.id, "/send")} disabled={busy === q.id + "/send"} className="flex items-center gap-1 text-xs bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 disabled:opacity-50 px-2.5 py-1.5 rounded-lg transition-colors">
+                            {busy === q.id + "/send" ? <Loader2 size={10} className="animate-spin" /> : <Send size={10} />}Envoyer
+                          </button>
+                        )}
+                        {q.status === "SENT" && !q.invoice && (
+                          <button onClick={() => act(q.id, "/accept")} disabled={busy === q.id + "/accept"} className="flex items-center gap-1 text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50 px-2.5 py-1.5 rounded-lg transition-colors">
+                            {busy === q.id + "/accept" ? <Loader2 size={10} className="animate-spin" /> : <ArrowRight size={10} />}Facturer
+                          </button>
+                        )}
+                        {["DRAFT", "REJECTED", "EXPIRED"].includes(q.status) && (
+                          <button onClick={() => act(q.id, "", "DELETE")} disabled={busy === q.id} aria-label="Supprimer" className="p-1.5 text-muted-foreground hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+                            {busy === q.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Factures ─────────────────────────────────────────────────────────────────
+
+type InvoiceFilter = "all" | InvoiceStatus;
 
 function InvoicesTab({ invoices, onRefresh }: { invoices: Invoice[]; onRefresh: () => void }) {
   const [marking, setMarking] = useState<string | null>(null);
+  const [filter, setFilter] = useState<InvoiceFilter>("all");
+  const [query, setQuery] = useState("");
 
   async function markPaid(id: string) {
     setMarking(id);
@@ -393,55 +487,64 @@ function InvoicesTab({ invoices, onRefresh }: { invoices: Invoice[]; onRefresh: 
     setMarking(null);
   }
 
-  if (invoices.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground/40 gap-2">
-        <Receipt size={32} strokeWidth={1.5} />
-        <p className="text-sm">Aucune facture pour l'instant.</p>
-      </div>
-    );
-  }
+  const options = ([["all", "Toutes"], ["PENDING", "En attente"], ["OVERDUE", "En retard"], ["PAID", "Payées"]] as const)
+    .map(([key, label]) => ({ key, label, count: invoices.filter((i) => key === "all" || i.status === key).length }));
+
+  const rows = useMemo(() => {
+    const s = query.trim().toLowerCase();
+    return invoices.filter((i) => (filter === "all" || i.status === filter) && (!s || `${i.number} ${i.title} ${i.prospect.name} ${i.prospect.company ?? ""}`.toLowerCase().includes(s)));
+  }, [invoices, filter, query]);
+
+  const outstanding = invoices.filter((i) => i.status === "PENDING" || i.status === "OVERDUE").reduce((s, i) => s + i.totalHT, 0);
 
   return (
-    <div className="divide-y divide-border">
-      {invoices.map((inv) => (
-        <div key={inv.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-muted/20 transition-colors">
-          <div className="flex-1 min-w-0 space-y-0.5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground font-mono">{inv.number}</span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${INVOICE_STATUS_COLORS[inv.status]}`}>
-                {INVOICE_STATUS_LABELS[inv.status]}
-              </span>
-              {inv.quote && (
-                <span className="text-[10px] text-muted-foreground/50">← {inv.quote.number}</span>
-              )}
-            </div>
-            <p className="text-sm font-medium truncate">{inv.title}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {inv.prospect.name}{inv.prospect.company ? ` — ${inv.prospect.company}` : ""}
-              {inv.status === "PAID"
-                ? ` · Payée le ${fmtDate(inv.paidAt)}`
-                : ` · Échéance ${fmtDate(inv.dueAt)}`}
-            </p>
-          </div>
+    <div className="px-6 py-5 space-y-4 max-w-[1200px] mx-auto">
+      <div className="flex flex-wrap items-center gap-3">
+        <Segmented value={filter} onChange={setFilter} options={options} />
+        <SearchBox value={query} onChange={setQuery} />
+        <p className="ml-auto text-xs text-muted-foreground">Reste à encaisser : <span className="text-foreground font-medium tabular-nums">{eur0(outstanding)}</span></p>
+      </div>
 
-          <div className="text-right shrink-0">
-            <p className="text-sm font-semibold">{fmt(inv.totalHT)} €</p>
-            <p className="text-[10px] text-muted-foreground">HT</p>
-          </div>
-
-          {inv.status !== "PAID" && inv.status !== "CANCELLED" && (
-            <button
-              onClick={() => markPaid(inv.id)}
-              disabled={marking === inv.id}
-              className="flex items-center gap-1 text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50 px-2.5 py-1.5 rounded-lg transition-colors shrink-0"
-            >
-              {marking === inv.id ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
-              Payée
-            </button>
-          )}
+      {rows.length === 0 ? <EmptyState icon={Receipt} text="Aucune facture." /> : (
+        <div className="rounded-xl border border-border bg-card/60 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead><tr className="border-b border-border">
+              <th className={TH}>Facture</th><th className={TH}>Client</th><th className={TH}>Statut</th>
+              <th className={`${TH} max-md:hidden`}>Échéance</th><th className={`${TH} text-right`}>Montant HT</th><th className={TH} />
+            </tr></thead>
+            <tbody className="divide-y divide-border/70">
+              {rows.map((inv) => {
+                const left = daysUntil(inv.dueAt);
+                const open = inv.status === "PENDING" || inv.status === "OVERDUE";
+                return (
+                  <tr key={inv.id} className="hover:bg-muted/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <p className="font-medium truncate max-w-64">{inv.title}</p>
+                      <p className="text-[11px] text-muted-foreground font-mono">{inv.number}{inv.quote ? ` · ${inv.quote.number}` : ""}</p>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">{clientName(inv.prospect)}</td>
+                    <td className="px-4 py-3"><Pill cls={INVOICE_STATUS_COLORS[inv.status]} dot={INVOICE_DOT[inv.status]}>{INVOICE_STATUS_LABELS[inv.status]}</Pill></td>
+                    <td className="px-4 py-3 text-xs max-md:hidden">
+                      {inv.status === "PAID" ? <span className="text-muted-foreground">Payée le {fmtDate(inv.paidAt)}</span>
+                        : <span className={left < 0 ? "text-red-400" : left <= 7 ? "text-amber-400" : "text-muted-foreground"}>{fmtDate(inv.dueAt)}{open && ` · ${left < 0 ? `${-left} j de retard` : `J-${left}`}`}</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold tabular-nums whitespace-nowrap">{fmt(inv.totalHT)} €</td>
+                    <td className="px-4 py-3">
+                      <div className="flex justify-end">
+                        {open && (
+                          <button onClick={() => markPaid(inv.id)} disabled={marking === inv.id} className="flex items-center gap-1 text-xs bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 disabled:opacity-50 px-2.5 py-1.5 rounded-lg transition-colors">
+                            {marking === inv.id ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}Payée
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-      ))}
+      )}
     </div>
   );
 }
@@ -474,7 +577,7 @@ export default function FinancePage() {
   }, [load]);
 
   const tabs: { id: Tab; label: string; icon: React.ElementType; count?: number }[] = [
-    { id: "dashboard", label: "Dashboard", icon: TrendingUp },
+    { id: "dashboard", label: "Vue d'ensemble", icon: TrendingUp },
     { id: "quotes", label: "Devis", icon: FileText, count: quotes.length },
     { id: "invoices", label: "Factures", icon: Receipt, count: invoices.length },
   ];
@@ -497,38 +600,35 @@ export default function FinancePage() {
       )}
 
       <div className="flex flex-col h-full overflow-hidden">
-        <header className="flex items-center justify-between px-5 py-3 border-b border-border shrink-0 bg-background/95 backdrop-blur-sm">
-          <div className="flex items-center gap-1">
+        <header className="px-6 pt-4 border-b border-border shrink-0">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h1 className="font-semibold text-base tracking-tight">Finance</h1>
+              <p className="text-xs text-muted-foreground">Devis, facturation et encaissements</p>
+            </div>
+            <button
+              onClick={() => setShowQuoteModal(true)}
+              className="flex items-center gap-1.5 text-sm font-medium bg-emerald-500 hover:bg-emerald-400 text-white px-3.5 py-2 rounded-lg shadow-lg shadow-emerald-500/20 transition-colors"
+            >
+              <Plus size={14} /> Nouveau devis
+            </button>
+          </div>
+          <nav className="flex gap-6 mt-3">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg transition-colors ${
-                  tab === t.id
-                    ? "bg-muted text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-                }`}
+                className={`flex items-center gap-1.5 text-sm pb-3 -mb-px border-b-2 transition-colors ${tab === t.id ? "border-emerald-400 text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"}`}
               >
-                <t.icon size={13} />
-                {t.label}
-                {t.count !== undefined && t.count > 0 && (
-                  <span className="text-[10px] bg-muted-foreground/20 px-1.5 py-0.5 rounded-full">{t.count}</span>
-                )}
+                <t.icon size={13} />{t.label}
+                {t.count !== undefined && t.count > 0 && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded-full tabular-nums">{t.count}</span>}
               </button>
             ))}
-          </div>
-
-          <button
-            onClick={() => setShowQuoteModal(true)}
-            className="flex items-center gap-1.5 text-sm bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 border border-blue-500/20 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <Plus size={13} />
-            Nouveau devis
-          </button>
+          </nav>
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          {tab === "dashboard" && <DashboardTab stats={stats} />}
+          {tab === "dashboard" && <DashboardTab stats={stats} quotes={quotes} invoices={invoices} goTo={setTab} />}
           {tab === "quotes" && <QuotesTab quotes={quotes} onRefresh={load} />}
           {tab === "invoices" && <InvoicesTab invoices={invoices} onRefresh={load} />}
         </div>

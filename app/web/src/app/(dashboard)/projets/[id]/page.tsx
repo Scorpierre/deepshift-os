@@ -7,6 +7,8 @@ import {
   MessageSquare, Package, Plus, RefreshCw, Sparkles, Trash2, X,
 } from "lucide-react";
 
+import { DateField } from "@/components/ui/date-field";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type ProjectStatus = "BRIEF" | "IN_PROGRESS" | "REVIEW" | "DELIVERED" | "COMPLETED" | "MAINTENANCE" | "ON_HOLD";
@@ -415,11 +417,9 @@ export default function ProjectPage() {
                     <label className="text-[10px] text-muted-foreground uppercase tracking-wide flex items-center gap-1">
                       <Calendar size={9} /> {label}
                     </label>
-                    <input
-                      type="date"
-                      defaultValue={fmtDateInput(value)}
-                      onBlur={(e) => patch({ [field]: e.target.value || null })}
-                      className="w-full text-sm bg-muted/30 border border-border rounded-xl px-3 py-2 outline-none focus:border-primary/40 transition-colors"
+                    <DateField
+                      value={fmtDateInput(value)}
+                      onChange={(v) => patch({ [field]: v || null })}
                     />
                   </div>
                 ))}
@@ -584,11 +584,10 @@ export default function ProjectPage() {
                   className="w-full text-sm bg-muted/30 border border-border rounded-xl px-3 py-2 outline-none focus:border-primary/40 transition-colors placeholder:text-muted-foreground/35"
                 />
                 <div className="flex items-center gap-2">
-                  <input
-                    type="date"
+                  <DateField
                     value={newMilestone.dueAt}
-                    onChange={(e) => setNewMilestone((f) => ({ ...f, dueAt: e.target.value }))}
-                    className="text-sm bg-muted/30 border border-border rounded-xl px-3 py-2 outline-none focus:border-primary/40 transition-colors"
+                    onChange={(v) => setNewMilestone((f) => ({ ...f, dueAt: v }))}
+                    className="w-36"
                   />
                   <button onClick={addMilestone}
                     className="text-sm bg-primary text-primary-foreground px-3 py-2 rounded-xl hover:bg-primary/90 transition-colors">

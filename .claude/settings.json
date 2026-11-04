@@ -7,7 +7,16 @@
       "Read(//usr/local/bin/**)",
       "Read(//Users/pierreconnes/.npm/bin/**)",
       "Bash(npx claude *)",
-      "Bash(npx vercel *)"
+      "Bash(npx vercel *)",
+      "Bash(ls -d /Users/pierreconnes/Documents/webapp/*/ 2>/dev/null | head -40; echo \"=== recherche lacavo ===\"; find /Users/pierreconnes/Documents -maxdepth 4 -iname \"*lacavo*\" 2>/dev/null | head -20)",
+      "Read(//Users/pierreconnes/Documents/webapp/**)",
+      "Read(//Users/pierreconnes/Documents/**)",
+      "Read(//Users/pierreconnes/Documents/webapp/Lacavo/**)",
+      "Read(//Users/pierreconnes/Documents/webapp/Lacavo/webSite/docs/**)",
+      "Bash(node --env-file=/private/tmp/claude-501/-Users-pierreconnes-Documents-deepShift/532b2c68-bd54-4877-b54e-061709413252/scratchpad/.env.vercel /Users/pierreconnes/Documents/deepShift/app/web/q.mjs)",
+      "Bash(echo \"--- exit: $? ---\")",
+      "Bash(npx eslint *)",
+      "Bash(echo \"--- eslint exit: $? ---\")"
     ]
   }
 }

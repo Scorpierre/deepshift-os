@@ -1,10 +1,12 @@
 # DeepShift — Suivi d'avancement
 
-> Dernière mise à jour : 2026-06-21
+> Dernière mise à jour : 2026-08-15
 
 ---
 
-## Infrastructure Azure
+## Infrastructure Azure (n8n uniquement)
+
+> Depuis la migration du 2026-08, l'app Next.js et PostgreSQL ne sont plus hébergées ici. La VM Azure ne sert plus qu'à n8n (+ suivi des coûts Azure via l'API Cost Management, pour le module Admin).
 
 | Tâche | Statut | Notes |
 |-------|--------|-------|
@@ -16,8 +18,23 @@
 | `.gitignore` complet | ✅ Fait | Node.js + Terraform (tfstate, tfvars, .terraform/) |
 | `terraform apply` — VM créée | ✅ Fait | IP : `<VM_PUBLIC_IP>` |
 | Docker installé sur la VM | ✅ Fait | Via cloud-init |
-| n8n + PostgreSQL lancés via Docker Compose | ✅ Fait | Port 5678 / 5432 |
+| n8n lancé via Docker Compose | ✅ Fait | Port 5678 |
 | Terraform — Managed Identity | ✅ Fait | SystemAssigned MI sur `deepshift-vm` + rôle `Cost Management Reader` — pas de secrets pour Azure Cost API |
+| Migration app + BDD hors VM | ✅ Fait | Voir section Vercel + Supabase ci-dessous |
+| Migrer n8n hors Azure (Railway ou autre) | ⬜ À faire | Objectif budget — VM Azure reste le poste le plus cher |
+
+---
+
+## Infrastructure Vercel + Supabase (app)
+
+| Tâche | Statut | Notes |
+|-------|--------|-------|
+| Migration deploy Azure → Vercel | ✅ Fait | `eeda61a` — workflow `deploy.yml` réécrit |
+| Root directory Vercel corrigé | ✅ Fait | Build depuis la racine du repo, pas `app/web` |
+| Compatibilité Vercel serverless | ✅ Fait | `d7a9f95` — `waitUntil` pour `analyzeProspect` (tâches longues en background) |
+| Connexion Supabase (pooler) | ✅ Fait | `@prisma/adapter-pg` + `pg`, config pool ajustée (`70528a5`) pour éviter le conflit de version `@types/pg` |
+| Crons Vercel natifs | ⬜ Retiré | `vercel.json` crons supprimés (`6dd203c`) — redondants avec les workflows n8n qui appellent déjà `/api/cron/*` par webhook |
+| `prisma db push` en déploiement | ⬜ Manuel | Exécuté localement contre Supabase, pas automatisé en CI |
 
 ---
 
@@ -27,10 +44,9 @@
 |-------|--------|-------|
 | Repo GitHub créé | ✅ Fait | `github.com/Scorpierre/deepshift-os` |
 | CI GitHub Actions | ✅ Fait | Déclenché sur PR vers `main` — typecheck + lint + build |
-| Auto-deploy GitHub Actions | ✅ Fait | Push sur `main` → SSH → `docker compose build --no-cache` + `docker compose up -d` |
+| Auto-deploy GitHub Actions | ✅ Fait | Push sur `main` → `vercel --prod` (`deploy.yml`) |
 | Déclenchement manuel deploy | ✅ Fait | `workflow_dispatch` ajouté |
-| `prisma db push` en deploy | ✅ Fait | Remplace `prisma migrate deploy` (workflow `db push` sans fichiers de migration) |
-| Secrets GitHub configurés | ✅ Fait | `VM_HOST`, `VM_USER`, `SSH_PRIVATE_KEY`, `ENV_PRODUCTION`, `DATABASE_URL` |
+| Secrets GitHub configurés | ✅ Fait | `VERCEL_TOKEN` (org `team_ZW8aMXWeBdLMd9w5bJB3ZPmb`, projet `deepshift`) |
 | Sécurité repo public | ✅ Fait | IPs remplacées par placeholders, secrets hors git |
 | Protection branche `main` | ⬜ À faire | Nécessite GitHub Pro (repo privé) |
 
@@ -123,15 +139,17 @@
 |----------|--------|-------|
 | Analyse prospect → scraping → scoring Claude → CRM | ✅ Fait | Webhook `/webhook/prospect-analysis` — déclenché à la création avec URL |
 | File 9h — envoi auto prospects SCORED | ✅ Fait | `/api/cron/daily-outreach` — SCORED sans email → Claude Sonnet → envoi Gmail → CONTACTED |
-| Relances auto J+3/J+7 + auto-lost J+10 | ✅ Fait | `/api/cron/process-followups` — Haiku génère relance → envoi Gmail |
+| Relances auto J+3/J+7 | ✅ Fait | `/api/cron/process-followups` — Haiku génère relance → envoi Gmail |
+| Auto-LOST J+10 sans réponse | ✅ Fait | `/api/cron/auto-lost` — route séparée de `process-followups` |
+| Relances paiement facture | ✅ Fait | `/api/cron/payment-reminders` |
 | Analyse réponses emails → intent → statut | ✅ Fait | Poll **horaire** — scan inbox + sent 2 derniers jours — intent Haiku → lifecycle meeting |
 | Dépense Claude auto 1er du mois | ✅ Fait | `/api/cron/monthly-claude-expense` — agrège `AiUsageLog` → dépense Finance |
-| Dépense Azure auto 1er du mois | ✅ Fait | `/api/cron/monthly-azure-expense` — IMDS → Azure Cost API → dépense Finance |
+| Dépense Azure auto 1er du mois | ⚠️ À vérifier | `n8n-monthly-azure-expense-workflow.json` existe et `/api/cron/monthly-azure-expense` est référencé dans `proxy.ts`, mais la route n'existe plus dans `app/api/cron/` — à recréer ou à retirer du workflow n8n |
 | Weekly review automatique lundi | ⬜ À faire | Actuellement déclenchement manuel — workflow n8n Schedule à créer |
 | Génération devis → envoi → relance | ⬜ À faire | — |
 | Onboarding client → projet → repo GitHub → email bienvenue | ⬜ À faire | — |
 
-> ⚠️ Le fichier `n8n-gmail-poll-workflow.json` est à jour (hourly) dans le repo — à importer manuellement dans l'interface n8n si pas déjà fait.
+> Les workflows n8n ci-dessus tournent sur la VM Azure et appellent les endpoints `/api/cron/*` désormais hébergés sur Vercel — penser à mettre à jour les URLs cibles dans n8n après la migration si ce n'est pas déjà fait.
 
 ---
 
@@ -140,16 +158,17 @@
 | Couche | Techno | Statut |
 |--------|--------|--------|
 | Frontend + Backend | Next.js 15 + TypeScript | ✅ |
-| Base de données | PostgreSQL 16 | ✅ (Docker — port 5432) |
-| ORM | Prisma 7 (`db push`) | ✅ |
+| Base de données | PostgreSQL 16 (Supabase) | ✅ |
+| ORM | Prisma 7 (`db push`) | ✅ (`@prisma/adapter-pg`) |
 | UI | Tailwind CSS | ✅ (shadcn minimal) |
 | IA | Claude API (Haiku 4.5 + Sonnet 4.6) | ✅ |
-| Automatisation | n8n self-hosted | ✅ (Docker — port 5678) |
+| Automatisation | n8n self-hosted | ✅ (Docker sur VM Azure — port 5678) |
 | Email | Gmail API (OAuth2) | ✅ |
 | Calendrier | Google Calendar API | ✅ |
 | Tâches | Google Tasks API | ✅ |
-| Hébergement | Azure VM `deepshift-vm` — FranceCentral | ✅ |
-| Infra as Code | Terraform | ✅ |
+| Hébergement app | Vercel | ✅ (depuis 2026-08) |
+| Hébergement n8n | Azure VM `deepshift-vm` — FranceCentral | ✅ |
+| Infra as Code | Terraform (VM Azure) | ✅ |
 
 ---
 
@@ -157,9 +176,11 @@
 
 | Priorité | Tâche |
 |----------|-------|
-| 🔴 Action | Importer `n8n-gmail-poll-workflow.json` dans n8n UI (poll hourly) |
+| 🔴 Action | Vérifier que les workflows n8n (VM Azure) ciblent bien les URLs Vercel post-migration |
+| 🔴 Action | Recréer ou retirer `/api/cron/monthly-azure-expense` (référencée dans `proxy.ts` et le workflow n8n, absente du code) |
 | 🟡 Module | IA centrale — chat interne Claude avec contexte entreprise complet |
 | 🟡 Module | Notifications push/email centralisées |
+| 🟢 Infra | Migrer n8n hors Azure (Railway ou équivalent) pour réduire le coût serveur |
 | 🟢 Workflow | Weekly review automatique (Schedule n8n lundi matin) |
 | 🟢 Workflow | Génération devis → envoi → relance paiement |
 | 🟢 Workflow | Onboarding client → création projet + repo GitHub + email bienvenue |
